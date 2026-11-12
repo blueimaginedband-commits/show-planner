@@ -53,6 +53,7 @@
 
   // Does this person's time window clash with a show's call time or set?
   function callTime(show) {
+    if (show.type === 'practice') return show.setStart ? ['practice starts', show.setStart] : null;
     const c = [['load-in', show.loadIn], ['soundcheck', show.soundcheck], ['doors', show.doors], ['the set', show.setStart]].filter((x) => x[1]);
     c.sort((a, b) => sortKey(a[1]) - sortKey(b[1]));
     return c[0] || null;
@@ -62,8 +63,39 @@
     const first = callTime(show);
     if (e.from && first && sortKey(e.from) > sortKey(first[1])) return `Gets there after ${first[0]} (${fmtTime(first[1])})`;
     const end = show.setEnd || show.setStart;
-    if (e.to && end && sortKey(e.to) < sortKey(end)) return `Has to leave before the set ends (${fmtTime(end)})`;
+    if (e.to && end && sortKey(e.to) < sortKey(end)) return `Has to leave before ${show.type === 'practice' ? 'practice' : 'the set'} ends (${fmtTime(end)})`;
     return '';
+  }
+
+  /* ---------- overlapping free time ---------- */
+  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const minToTime = (m) => { m = ((m % 1440) + 1440) % 1440; return pad(Math.floor(m / 60)) + ':' + pad(m % 60); };
+  function span(e) { const a = e.from ? toMin(e.from) : 0; let b = e.to ? toMin(e.to) : 1440; if (b <= a) b += 1440; return [a, b]; }
+  function intersect(es) {
+    let a = 0, b = 2880;
+    es.forEach((e) => { const [x, y] = span(e); a = Math.max(a, x); b = Math.min(b, y); });
+    return b > a ? [a, b] : null;
+  }
+  function spanText(w) {
+    const [a, b] = w;
+    if (a === 0 && b >= 1440) return 'All day';
+    if (a === 0) return 'Until ' + fmtTime(minToTime(b));
+    if (b === 1440) return 'After ' + fmtTime(minToTime(a));
+    return fmtTime(minToTime(a)) + ' \u2013 ' + fmtTime(minToTime(b));
+  }
+  function durText(w) {
+    const [a, b] = w; if (a === 0 || b >= 1440) return '';
+    const m = b - a, h = Math.floor(m / 60), r = m % 60;
+    return h ? (r ? `${h}h ${r}m` : `${h} hr${h === 1 ? '' : 's'}`) : `${r}m`;
+  }
+  // For a date: who is free, and when do those free hours overlap?
+  function groupWindow(date) {
+    const ppl = members();
+    const es = ppl.map((n) => ({ n, e: entry(n, date) }));
+    const free = es.filter((x) => x.e.s === 'free');
+    const notFree = es.filter((x) => x.e.s !== 'free');
+    const win = free.length ? intersect(free.map((x) => x.e)) : null;
+    return { ppl, free, notFree, win, all: ppl.length > 0 && notFree.length === 0 };
   }
 
   /* ---------- api ---------- */
@@ -194,7 +226,31 @@
   }
 
   /* ---------- shows list ---------- */
+  function practiceCard(s, isNext, isPast) {
+    const d = parse(s.date);
+    const t = s.setStart ? fmtTime(s.setStart) + (s.setEnd ? ' \u2013 ' + fmtTime(s.setEnd) : '') : 'Time TBD';
+    const where = [s.venue !== 'Practice' ? s.venue : '', s.address, s.city].filter(Boolean);
+    const armed = S.armed === s.id;
+    return `<article class="show practice${isNext ? ' next' : ''}">
+      <div class="datebox"><div class="dow">${d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()}</div><div class="day">${d.getDate()}</div><div class="mon">${d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}</div></div>
+      <div>
+        <h3>Practice<span class="badge prac">${isNext ? esc(whenLabel(s.date)) : 'Rehearsal'}</span></h3>
+        <div class="ptime">${esc(t)}</div>
+        ${where.length ? `<div class="where">${esc(where.join(' \u00b7 '))} \u00b7 <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(where.join(', '))}" target="_blank" rel="noopener">Map</a></div>` : ''}
+        ${isPast ? '' : `<div class="who">${members().map((n) => personChip(n, s.date, s)).join('')}</div>`}
+        ${s.notes ? `<div class="extra"><div class="notes">${esc(s.notes)}</div></div>` : ''}
+        <div class="show-acts">
+          <button class="btn ghost small" type="button" data-edit="${esc(s.id)}">Edit</button>
+          <button class="btn ${armed ? 'danger' : 'ghost'} small" type="button" data-del="${esc(s.id)}">${armed ? 'Tap again to delete' : 'Delete'}</button>
+        </div>
+      </div>
+    </article>`;
+  }
+  const isPractice = (s) => s.type === 'practice';
+  const gigsOnly = () => sortedShows().filter((s) => !isPractice(s));
+
   function showCard(s, isNext, isPast) {
+    if (isPractice(s)) return practiceCard(s, isNext, isPast);
     const d = parse(s.date);
     const tl = [['Load-in', s.loadIn], ['Soundcheck', s.soundcheck], ['Doors', s.doors]].filter((x) => x[1]);
     const set = s.setStart ? fmtTime(s.setStart) + (s.setEnd ? '–' + fmtTime(s.setEnd) : '') : '';
@@ -234,13 +290,16 @@
     const upcoming = sorted.filter((s) => s.date >= today);
     const past = sorted.filter((s) => s.date < today).reverse();
     if (!upcoming.length) {
-      $('#showsList').innerHTML = `<div class="empty"><h3>No shows on the books</h3><p class="muted">Add your next gig, or check <a href="#availability">Availability</a> to see which dates the band is free.</p><button class="btn" type="button" data-new="">+ Add show</button></div>`;
+      $('#showsList').innerHTML = `<div class="empty"><h3>Nothing scheduled yet</h3><p class="muted">Check <a href="#availability">Availability</a> to see when everyone\u2019s free, then plan a practice or add a show.</p><div class="btn-row" style="justify-content:center"><button class="btn" type="button" data-new="" data-type="practice">+ Plan practice</button><button class="btn ghost" type="button" data-new="">+ Add show</button></div></div>`;
     } else {
       let html = '', lastMonth = '';
-      upcoming.forEach((s, i) => {
+      const seen = new Set();
+      upcoming.forEach((s) => {
         const m = parse(s.date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
         if (m !== lastMonth) { html += `<div class="month-label">${esc(m)}</div>`; lastMonth = m; }
-        html += showCard(s, i === 0, false);
+        const kind = isPractice(s) ? 'p' : 's';
+        html += showCard(s, !seen.has(kind), false);
+        seen.add(kind);
       });
       $('#showsList').innerHTML = html;
     }
@@ -255,7 +314,7 @@
     const ed = e.target.closest('[data-edit]');
     if (ed) { const s = S.shows.find((x) => x.id === ed.dataset.edit); if (s) openShow(s); return; }
     const nw = e.target.closest('[data-new]');
-    if (nw) { openShow(null, nw.dataset.new); return; }
+    if (nw) { openShow(null, nw.dataset.new, nw.dataset.type, nw.dataset.from, nw.dataset.to); return; }
     const del = e.target.closest('[data-del]');
     if (del) {
       const id = del.dataset.del;
@@ -278,7 +337,7 @@
     return { timed, anytime };
   }
   function pickItinShow() {
-    const sorted = sortedShows();
+    const sorted = gigsOnly();
     if (S.itinId && sorted.some((s) => s.id === S.itinId)) return sorted.find((s) => s.id === S.itinId);
     const today = todayIso();
     return sorted.find((s) => s.date >= today) || sorted[sorted.length - 1] || null;
@@ -292,7 +351,7 @@
       return;
     }
     const today = todayIso();
-    const list = sortedShows().filter((s) => s.date >= today || s.id === show.id);
+    const list = gigsOnly().filter((s) => s.date >= today || s.id === show.id);
     picker.innerHTML = list.map((s) => {
       const d = parse(s.date);
       return `<button type="button" class="tix${s.id === show.id ? ' on' : ''}" data-itin="${esc(s.id)}">
@@ -412,19 +471,35 @@
       if (last) last.querySelector(q ? '[data-k=time]' : '[data-k=label]').focus();
     }
   });
-  function openShow(show, date) {
+  function setType(t) {
+    S.formType = t === 'practice' ? 'practice' : 'show';
+    const p = S.formType === 'practice';
+    form.classList.toggle('is-practice', p);
+    document.querySelectorAll('#typeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.type === S.formType));
+    $('#showFormTitle').textContent = (S.editing ? 'Edit ' : p ? 'Plan ' : 'Add ') + (p ? 'practice' : 'show');
+    $('#venueLbl').textContent = p ? 'Where' : 'Venue';
+    form.venue.placeholder = p ? 'Rehearsal space, Sam\u2019s garage\u2026' : 'The Echo';
+    form.notes.placeholder = p ? 'What we\u2019re working on: new songs, set list run-through\u2026' : 'Backline, parking, set list, merch\u2026';
+    $('#saveShow').textContent = p ? 'Save practice' : 'Save show';
+  }
+  $('#typeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) setType(b.dataset.type); });
+  function openShow(show, date, type, from, to) {
     S.editing = show ? show.id : null;
-    $('#showFormTitle').textContent = show ? 'Edit show' : 'Add show';
     FIELDS.forEach((f) => (form[f].value = show ? show[f] || '' : ''));
+    form.pStart.value = show ? show.setStart || '' : from || '';
+    form.pEnd.value = show ? show.setEnd || '' : to || '';
+    if (show && show.type === 'practice' && show.venue === 'Practice') form.venue.value = '';
     if (!show) { form.status.value = 'confirmed'; form.date.value = date || ''; }
+    setType(show ? show.type : type);
     S.schedDraft = show ? (show.schedule || []).map((x) => ({ ...x })) : [];
     renderSched();
     $('#showErr').textContent = '';
     $('#modal').hidden = false;
-    setTimeout(() => (show || date ? form.venue : form.date).focus(), 30);
+    setTimeout(() => (show || date ? (S.formType === 'practice' && !form.pStart.value ? form.pStart : form.venue) : form.date).focus(), 30);
   }
   const closeShow = () => { $('#modal').hidden = true; S.editing = null; };
-  $('#addShow').addEventListener('click', () => openShow(null));
+  $('#addShow').addEventListener('click', () => openShow(null, '', 'show'));
+  $('#addPractice').addEventListener('click', () => openShow(null, '', 'practice'));
   $('#closeModal').addEventListener('click', closeShow);
   $('#cancelShow').addEventListener('click', closeShow);
   $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeShow(); });
@@ -433,16 +508,21 @@
     e.preventDefault();
     const body = { by: S.me };
     FIELDS.forEach((f) => (body[f] = form[f].value.trim()));
+    body.type = S.formType;
     body.schedule = S.schedDraft.map((x) => ({ time: x.time || '', label: (x.label || '').trim(), note: (x.note || '').trim() })).filter((x) => x.label);
     if (!body.date) return ($('#showErr').textContent = 'Pick a date.');
-    if (!body.venue) return ($('#showErr').textContent = 'Add the venue name.');
-    if (S.schedDraft.some((x) => !(x.label || '').trim() && (x.time || x.note))) return ($('#showErr').textContent = 'Each schedule step needs a name.');
+    if (body.type === 'practice') {
+      Object.assign(body, { setStart: form.pStart.value, setEnd: form.pEnd.value, loadIn: '', soundcheck: '', doors: '', contact: '', pay: '', status: 'confirmed', schedule: [] });
+    } else {
+      if (!body.venue) return ($('#showErr').textContent = 'Add the venue name.');
+      if (S.schedDraft.some((x) => !(x.label || '').trim() && (x.time || x.note))) return ($('#showErr').textContent = 'Each schedule step needs a name.');
+    }
     $('#saveShow').disabled = true;
     try {
       const st = S.editing ? await api('PUT', '/api/shows/' + S.editing, body) : await api('POST', '/api/shows', body);
-      if (!S.editing) { const added = st.shows.filter((s) => s.date === body.date && s.venue === body.venue).pop(); if (added) S.itinId = added.id; }
+      if (!S.editing && body.type === 'show') { const added = st.shows.filter((s) => s.date === body.date && s.venue === body.venue).pop(); if (added) S.itinId = added.id; }
       apply(st);
-      closeShow(); toast('Show saved');
+      closeShow(); toast(body.type === 'practice' ? 'Practice saved' : 'Show saved');
       if (location.hash === '#availability') location.hash = '#shows';
     } catch (err) { $('#showErr').textContent = err.message; }
     $('#saveShow').disabled = false;
@@ -457,7 +537,7 @@
     document.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
     $('#calHint').textContent = S.mode === 'mine'
       ? 'Tap a date to cycle Free → Maybe → Busy → blank. Add times like “after 6 PM” in the panel. Saves automatically.'
-      : 'Dots show each person. Tap a date to see who’s free, when, and book a show.';
+      : 'Dots show each person. Green outline = everyone\u2019s free. Tap a date to see the hours you overlap.';
     const y = S.month.getFullYear(), m = S.month.getMonth();
     $('#monthLabel').textContent = S.month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     const startDow = new Date(y, m, 1).getDay();
@@ -468,7 +548,8 @@
       const d = new Date(start); d.setDate(start.getDate() + i);
       if (i >= 35 && d.getMonth() !== m) break;
       const k = iso(d), inMonth = d.getMonth() === m, isPast = k < today;
-      const gig = showsOn(k).length ? '<span class="gig" title="Show booked"></span>' : '';
+      const evs = showsOn(k);
+      const gig = (evs.some((x) => !isPractice(x)) ? '<span class="gig" title="Show"></span>' : '') + (evs.some(isPractice) ? '<span class="prac" title="Practice"></span>' : '');
       let cls = 'd', inner = '';
       if (!inMonth) cls += ' out';
       if (isPast) cls += ' past';
@@ -480,7 +561,7 @@
       } else {
         const es = ppl.map((n) => entry(n, k));
         const free = es.filter((x) => x.s === 'free').length;
-        if (ppl.length && free === ppl.length) cls += ' all-free';
+        if (ppl.length && free === ppl.length && intersect(es)) cls += ' all-free';
         inner = `<div class="dots">${es.map((x) => `<i class="${x.s}${x.from || x.to ? ' part' : ''}"></i>`).join('')}</div>${free ? `<span class="cnt">${free}/${ppl.length}</span>` : ''}`;
       }
       html += `<button type="button" class="${cls}" data-day="${k}" ${inMonth ? '' : 'tabindex="-1"'}><span class="n">${d.getDate()}</span>${inner}${gig}</button>`;
@@ -532,13 +613,29 @@
         <button type="button" data-win="|">All day</button>
       </div>` : '';
     el.innerHTML = `<h3>${esc(fmtLong(k))}</h3>
-      ${gigs.map((g) => `<button type="button" class="gig-link" data-itin="${esc(g.id)}"><span class="sw gig"></span> <b>${esc(g.venue)}</b>${g.setStart ? ' · set ' + fmtTime(g.setStart) : ''} →</button>`).join('')}
+      ${gigs.map((g) => isPractice(g)
+        ? `<button type="button" class="gig-link" data-edit="${esc(g.id)}"><span class="sw prac"></span> <b>Practice</b>${g.setStart ? ' \u00b7 ' + fmtTime(g.setStart) : ''}${g.setEnd ? '\u2013' + fmtTime(g.setEnd) : ''}</button>`
+        : `<button type="button" class="gig-link" data-itin="${esc(g.id)}"><span class="sw gig"></span> <b>${esc(g.venue)}</b>${g.setStart ? ' \u00b7 set ' + fmtTime(g.setStart) : ''} \u2192</button>`).join('')}
+      ${overlapHtml(k)}
       ${!isPast ? `<div class="muted small" style="margin-top:10px">Your answer</div><div class="status-pick">
         ${['free', 'maybe', 'busy'].map((s) => `<button type="button" class="${s}${mine.s === s ? ' on' : ''}" data-set="${s}">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}
         ${mine.s ? '<button type="button" data-set="">Clear</button>' : ''}
       </div>${timeRow}` : ''}
       ${list('Free', groups.free)}${list('Maybe', groups.maybe)}${list('Busy', groups.busy)}${list('No answer yet', groups[''])}
-      ${!isPast && !gigs.length ? `<button class="btn small" type="button" data-new="${k}" style="margin-top:14px">+ Book a show on this date</button>` : ''}`;
+      ${!isPast ? `<div class="btn-row" style="margin-top:14px">${planBtn(k, 'btn small')}<button class="btn ghost small" type="button" data-new="${k}">+ Add show</button></div>` : ''}`;
+  }
+  function planBtn(k, cls, label) {
+    const g = groupWindow(k);
+    let from = '', to = '';
+    if (g.win && !(g.win[0] === 0 && g.win[1] >= 1440)) { if (g.win[0] > 0) from = minToTime(g.win[0]); if (g.win[1] < 1440) to = minToTime(g.win[1]); }
+    return `<button class="${cls}" type="button" data-new="${k}" data-type="practice" data-from="${from}" data-to="${to}">${label || '+ Plan practice'}</button>`;
+  }
+  function overlapHtml(k) {
+    const g = groupWindow(k);
+    if (!g.ppl.length || !g.free.length) return '';
+    if (g.all && g.win) return `<div class="overlap all"><b>Everyone\u2019s free</b> \u00b7 ${esc(spanText(g.win))}${durText(g.win) ? ` (${durText(g.win)})` : ''}</div>`;
+    if (g.all) return `<div class="overlap some">Everyone\u2019s free, but their times don\u2019t overlap.</div>`;
+    return `<div class="overlap some">${g.free.length} of ${g.ppl.length} free${g.win ? ' \u00b7 overlap ' + esc(spanText(g.win)) : ''}. Waiting on ${esc(g.notFree.map((x) => x.n).join(', '))}.</div>`;
   }
   $('#dayDetail').addEventListener('click', (e) => {
     if (!S.sel) return;
@@ -556,24 +653,27 @@
   });
 
   function renderBest() {
-    const ppl = members(); const out = [];
+    const all = [], almost = [];
+    const ppl = members();
     if (ppl.length) {
       const d = parse(todayIso());
-      for (let i = 0; i < 90; i++, d.setDate(d.getDate() + 1)) {
+      for (let i = 0; i < 60; i++, d.setDate(d.getDate() + 1)) {
         const k = iso(d); if (showsOn(k).length) continue;
-        const es = ppl.map((n) => entry(n, k));
-        const free = es.filter((x) => x.s === 'free').length, maybe = es.filter((x) => x.s === 'maybe').length, busy = es.filter((x) => x.s === 'busy').length;
-        const partial = es.filter((x) => x.s === 'free' && (x.from || x.to)).length;
-        if (free) out.push({ k, free, maybe, busy, partial });
+        const g = groupWindow(k);
+        const long = g.win && g.win[1] - g.win[0] >= 60;
+        if (g.all && long) all.push({ k, g });
+        else if (ppl.length > 1 && g.notFree.length === 1 && long) almost.push({ k, g });
       }
-      out.sort((a, b) => b.free - a.free || a.busy - b.busy || a.partial - b.partial || b.maybe - a.maybe || a.k.localeCompare(b.k));
     }
-    $('#bestDates').innerHTML = out.length ? '<ul class="best">' + out.slice(0, 8).map((r) => {
-      const none = ppl.length - r.free - r.maybe - r.busy;
-      const sub = [r.partial ? r.partial + ' only part of the day' : '', r.maybe ? r.maybe + ' maybe' : '', r.busy ? r.busy + ' busy' : '', none ? none + ' no answer' : ''].filter(Boolean).join(' · ');
-      return `<li><div><b>${esc(fmtShort(r.k))}</b><span class="pill">${r.free}/${ppl.length} free</span><div class="sub">${sub || 'Everyone’s free all day'}</div></div>
-        <button class="btn ghost small" type="button" data-new="${r.k}">Book</button></li>`;
-    }).join('') + '</ul>' : '<p class="muted small" style="margin:0">Once people mark free dates, the best ones show up here.</p>';
+    const row = (r, missing) => `<li><div><b>${esc(fmtShort(r.k))}</b>
+        <div class="win">${esc(spanText(r.g.win))}${durText(r.g.win) ? `<span class="dur">${durText(r.g.win)}</span>` : ''}</div>
+        ${missing ? `<div class="sub">Needs ${esc(r.g.notFree[0].n)} (${{ maybe: 'maybe', busy: 'busy', '': 'no answer' }[r.g.notFree[0].e.s]})</div>` : ''}</div>
+        ${planBtn(r.k, 'btn ghost small', 'Plan')}</li>`;
+    let html = '';
+    if (all.length) html += '<ul class="best">' + all.slice(0, 8).map((r) => row(r, false)).join('') + '</ul>';
+    if (almost.length && all.length < 5) html += `<div class="best-sub">One person away</div><ul class="best">${almost.slice(0, 5 - Math.min(all.length, 4)).map((r) => row(r, true)).join('')}</ul>`;
+    if (!html) html = `<p class="muted small" style="margin:0">${ppl.length < 2 ? 'Once bandmates mark their dates, the times you\u2019re all free show up here.' : 'No day yet where everyone\u2019s free for at least an hour. Ask the band to fill in more dates.'}</p>`;
+    $('#bestDates').innerHTML = html;
   }
 
   function renderMembers() {

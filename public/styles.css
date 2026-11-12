@@ -251,3 +251,26 @@ textarea{min-height:80px;resize:vertical}
 .modal > *, .two > *, .ros > *, .sched-row > *, label.f > input, label.f > select{min-width:0}
 .sched-row{grid-template-columns:136px 1.2fr 1fr 36px}
 @media (max-width:600px){.sched-row{grid-template-columns:128px 1fr 36px}}
+
+/* ---------- practices ---------- */
+:root{--prac:#3ec7d6}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.type-seg{justify-self:start}
+.modal.is-practice .only-show{display:none !important}
+.modal:not(.is-practice) .only-practice{display:none !important}
+.sw.prac{background:var(--prac);border-radius:50%}
+.d .prac{position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--prac);box-shadow:0 0 0 2px var(--panel-2)}
+.d .gig + .prac{right:18px}
+.show.practice{grid-template-columns:76px 1fr;border-style:dashed;border-color:rgba(62,199,214,.35);padding:14px 18px}
+.show.practice .datebox .mon{color:var(--prac)}
+.show.practice h3{font-size:18px}
+.badge.prac{background:rgba(62,199,214,.15);color:var(--prac)}
+.show.practice.next{border-style:solid;border-color:var(--prac);box-shadow:0 0 0 1px var(--prac),0 10px 40px -20px var(--prac)}
+.show.practice .badge.nextup{background:var(--prac);color:#04262a}
+.ptime{font-weight:700;margin-top:4px}
+.overlap{margin-top:10px;padding:10px 12px;border-radius:10px;font-size:14px}
+.overlap.all{background:rgba(63,184,120,.12);border:1px solid rgba(63,184,120,.4);color:var(--free)}
+.overlap.some{background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
+.best .win{font-size:13px;color:var(--ink);margin-top:2px}
+.best .dur{font-size:11px;font-weight:700;color:var(--muted);margin-left:6px}
+.best-sub{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--muted);margin:16px 0 8px}

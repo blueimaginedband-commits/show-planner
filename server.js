@@ -62,8 +62,9 @@ function cleanEntry(v) {
 function cleanShow(input, prev) {
   const s = {
     id: prev ? prev.id : crypto.randomUUID(),
+    type: input.type === 'practice' ? 'practice' : 'show',
     date: typeof input.date === 'string' && DATE_RE.test(input.date) ? input.date : '',
-    venue: str(input.venue, 100),
+    venue: str(input.venue, 100) || (input.type === 'practice' ? 'Practice' : ''),
     city: str(input.city, 80),
     address: str(input.address, 200),
     status: SHOW_STATUSES.has(input.status) ? input.status : 'confirmed',
@@ -95,6 +96,7 @@ function send(res, code, body, headers = {}) {
     'Content-Type': isObj ? 'application/json; charset=utf-8' : (headers['Content-Type'] || 'text/plain; charset=utf-8'),
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
+    'X-Robots-Tag': 'noindex, nofollow',
     ...headers,
   });
   res.end(isObj ? JSON.stringify(body) : body);
@@ -148,6 +150,7 @@ const server = http.createServer(async (req, res) => {
   const p = url.pathname;
 
   if (p === '/health') return send(res, 200, { ok: true });
+  if (p === '/robots.txt') return send(res, 200, 'User-agent: *\nDisallow: /\n');
   if (!p.startsWith('/api/')) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
     return serveStatic(req, res, p);

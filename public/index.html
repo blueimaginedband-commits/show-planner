@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0f0d0c">
+<meta name="robots" content="noindex, nofollow">
 <title>Show Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23f5a524'/%3E%3Cpath d='M13 9v11.5a3.5 3.5 0 1 1-2-3.2V9h9v3h-7z' fill='%230f0d0c'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +18,7 @@
   <form id="gateForm" class="gate-card" novalidate>
     <div class="logo">&#9835;</div>
     <h1 id="gateTitle">Show Planner</h1>
-    <p class="muted">Shows, set times, and who's free.</p>
+    <p class="muted">Practices, shows, and when everyone's free.</p>
     <label class="f" id="passWrap">Band passcode<input id="passInput" type="password" autocomplete="current-password" placeholder="Ask your bandmates"></label>
     <div class="f">
       <span>Who are you?</span>
@@ -33,13 +34,13 @@
   <header class="top">
     <div class="wrap top-row">
       <div>
-        <p class="eyebrow">Show Planner</p>
+        <p class="eyebrow">Band planner</p>
         <h1 id="bandName">Our Shows</h1>
       </div>
       <div class="me">You're <b id="meName"></b> · <button class="linkbtn" id="switchMe" type="button">switch</button></div>
     </div>
     <nav class="wrap tabs">
-      <a href="#shows">Shows</a>
+      <a href="#shows">Schedule</a>
       <a href="#itinerary">Itinerary</a>
       <a href="#availability">Availability</a>
     </nav>
@@ -52,11 +53,14 @@
     <section id="tab-shows" class="tab">
       <div class="row-between">
         <h2>Upcoming</h2>
-        <button class="btn" id="addShow" type="button">+ Add show</button>
+        <div class="btn-row">
+          <button class="btn" id="addPractice" type="button">+ Plan practice</button>
+          <button class="btn ghost" id="addShow" type="button">+ Add show</button>
+        </div>
       </div>
       <div id="showsList"></div>
       <details class="past" id="pastWrap" hidden>
-        <summary>Past shows <span id="pastCount"></span></summary>
+        <summary>Past <span id="pastCount"></span></summary>
         <div id="pastList"></div>
       </details>
     </section>
@@ -89,14 +93,15 @@
             <span><i class="sw free"></i>Free</span>
             <span><i class="sw maybe"></i>Maybe</span>
             <span><i class="sw busy"></i>Busy</span>
-            <span><i class="sw gig"></i>Show booked</span>
+            <span><i class="sw gig"></i>Show</span>
+            <span><i class="sw prac"></i>Practice</span>
           </div>
         </div>
         <aside class="side">
           <div class="panel" id="dayDetail"></div>
           <div class="panel">
-            <h3>Best open dates</h3>
-            <p class="muted small">Next 90 days, no show booked yet</p>
+            <h3>When everyone’s free</h3>
+            <p class="muted small">Next 60 days, nothing booked yet. Times are when your free hours overlap.</p>
             <div id="bestDates"></div>
           </div>
           <div class="panel">
@@ -116,9 +121,13 @@
       <h2 id="showFormTitle">Add show</h2>
       <button class="iconbtn" type="button" id="closeModal" aria-label="Close">&times;</button>
     </div>
+    <div class="seg type-seg" id="typeSeg">
+      <button type="button" data-type="practice">Practice</button>
+      <button type="button" data-type="show">Show</button>
+    </div>
     <div class="two">
       <label class="f">Date<input type="date" name="date" required></label>
-      <label class="f">Status
+      <label class="f only-show">Status
         <select name="status">
           <option value="confirmed">Confirmed</option>
           <option value="hold">On hold</option>
@@ -127,11 +136,15 @@
       </label>
     </div>
     <div class="two">
-      <label class="f">Venue<input name="venue" maxlength="100" placeholder="The Echo" required></label>
+      <label class="f"><span id="venueLbl">Venue</span><input name="venue" maxlength="100" placeholder="The Echo" required></label>
       <label class="f">City<input name="city" maxlength="80" placeholder="Los Angeles"></label>
     </div>
+    <div class="two only-practice">
+      <label class="f">Starts<input type="time" name="pStart"></label>
+      <label class="f">Ends<input type="time" name="pEnd"></label>
+    </div>
     <label class="f">Address<input name="address" maxlength="200" placeholder="Street address (for the map link)"></label>
-    <fieldset class="ros">
+    <fieldset class="ros only-show">
       <legend>Run of show</legend>
       <label class="f">Load-in<input type="time" name="loadIn"></label>
       <label class="f">Soundcheck<input type="time" name="soundcheck"></label>
@@ -139,7 +152,7 @@
       <label class="f">Set starts<input type="time" name="setStart"></label>
       <label class="f">Set ends<input type="time" name="setEnd"></label>
     </fieldset>
-    <fieldset class="sched">
+    <fieldset class="sched only-show">
       <legend>Day-of schedule</legend>
       <div id="schedRows"></div>
       <div class="quick">
@@ -153,7 +166,7 @@
         <button type="button" id="addStep" class="add">+ Custom step</button>
       </div>
     </fieldset>
-    <div class="two">
+    <div class="two only-show">
       <label class="f">Venue contact<input name="contact" maxlength="120" placeholder="Name, phone or email"></label>
       <label class="f">Pay / deal<input name="pay" maxlength="60" placeholder="$300 guarantee"></label>
     </div>
