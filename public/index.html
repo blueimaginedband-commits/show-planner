@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f0d0c">
+<title>Show Planner</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23f5a524'/%3E%3Cpath d='M13 9v11.5a3.5 3.5 0 1 1-2-3.2V9h9v3h-7z' fill='%230f0d0c'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- sign-in gate -->
+<div id="gate" class="gate" hidden>
+  <form id="gateForm" class="gate-card" novalidate>
+    <div class="logo">&#9835;</div>
+    <h1 id="gateTitle">Show Planner</h1>
+    <p class="muted">Shows, set times, and who's free.</p>
+    <label class="f" id="passWrap">Band passcode<input id="passInput" type="password" autocomplete="current-password" placeholder="Ask your bandmates"></label>
+    <div class="f">
+      <span>Who are you?</span>
+      <div class="name-chips" id="nameChips"></div>
+      <input id="nameInput" maxlength="40" placeholder="Type your name" autocomplete="nickname">
+    </div>
+    <p class="err" id="gateErr"></p>
+    <button class="btn" type="submit">Let's go</button>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="wrap top-row">
+      <div>
+        <p class="eyebrow">Show Planner</p>
+        <h1 id="bandName">Our Shows</h1>
+      </div>
+      <div class="me">You're <b id="meName"></b> · <button class="linkbtn" id="switchMe" type="button">switch</button></div>
+    </div>
+    <nav class="wrap tabs">
+      <a href="#shows">Shows</a>
+      <a href="#availability">Availability</a>
+    </nav>
+  </header>
+
+  <div class="wrap"><div class="banner" id="banner" hidden></div></div>
+
+  <main class="wrap">
+    <!-- SHOWS -->
+    <section id="tab-shows" class="tab">
+      <div class="row-between">
+        <h2>Upcoming</h2>
+        <button class="btn" id="addShow" type="button">+ Add show</button>
+      </div>
+      <div id="showsList"></div>
+      <details class="past" id="pastWrap" hidden>
+        <summary>Past shows <span id="pastCount"></span></summary>
+        <div id="pastList"></div>
+      </details>
+    </section>
+
+    <!-- AVAILABILITY -->
+    <section id="tab-availability" class="tab" hidden>
+      <div class="row-between">
+        <div class="seg">
+          <button type="button" data-mode="mine">Mark my dates</button>
+          <button type="button" data-mode="band">Whole band</button>
+        </div>
+        <span class="status" id="saveStatus"></span>
+      </div>
+      <p class="hint" id="calHint"></p>
+      <div class="avail-layout">
+        <div class="panel">
+          <div class="cal-head">
+            <button class="iconbtn" id="prevMonth" type="button" aria-label="Previous month">&#8249;</button>
+            <h3 id="monthLabel"></h3>
+            <button class="iconbtn" id="nextMonth" type="button" aria-label="Next month">&#8250;</button>
+          </div>
+          <div class="cal" id="cal"></div>
+          <div class="legend">
+            <span><i class="sw free"></i>Free</span>
+            <span><i class="sw maybe"></i>Maybe</span>
+            <span><i class="sw busy"></i>Busy</span>
+            <span><i class="sw gig"></i>Show booked</span>
+          </div>
+        </div>
+        <aside class="side">
+          <div class="panel" id="dayDetail"></div>
+          <div class="panel">
+            <h3>Best open dates</h3>
+            <p class="muted small">Next 90 days, no show booked yet</p>
+            <div id="bestDates"></div>
+          </div>
+          <div class="panel">
+            <h3>Band</h3>
+            <div id="members"></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- show editor -->
+<div class="overlay" id="modal" hidden>
+  <form class="modal" id="showForm" novalidate>
+    <div class="row-between" style="margin-bottom:4px">
+      <h2 id="showFormTitle">Add show</h2>
+      <button class="iconbtn" type="button" id="closeModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="two">
+      <label class="f">Date<input type="date" name="date" required></label>
+      <label class="f">Status
+        <select name="status">
+          <option value="confirmed">Confirmed</option>
+          <option value="hold">On hold</option>
+          <option value="idea">Idea / pitching</option>
+        </select>
+      </label>
+    </div>
+    <div class="two">
+      <label class="f">Venue<input name="venue" maxlength="100" placeholder="The Echo" required></label>
+      <label class="f">City<input name="city" maxlength="80" placeholder="Los Angeles"></label>
+    </div>
+    <label class="f">Address<input name="address" maxlength="200" placeholder="Street address (for the map link)"></label>
+    <fieldset class="ros">
+      <legend>Run of show</legend>
+      <label class="f">Load-in<input type="time" name="loadIn"></label>
+      <label class="f">Soundcheck<input type="time" name="soundcheck"></label>
+      <label class="f">Doors<input type="time" name="doors"></label>
+      <label class="f">Set starts<input type="time" name="setStart"></label>
+      <label class="f">Set ends<input type="time" name="setEnd"></label>
+    </fieldset>
+    <div class="two">
+      <label class="f">Venue contact<input name="contact" maxlength="120" placeholder="Name, phone or email"></label>
+      <label class="f">Pay / deal<input name="pay" maxlength="60" placeholder="$300 guarantee"></label>
+    </div>
+    <label class="f">Notes<textarea name="notes" maxlength="2000" placeholder="Backline, parking, set list, merch…"></textarea></label>
+    <p class="err" id="showErr"></p>
+    <div class="actions">
+      <button class="btn ghost" type="button" id="cancelShow">Cancel</button>
+      <button class="btn" type="submit" id="saveShow">Save show</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>

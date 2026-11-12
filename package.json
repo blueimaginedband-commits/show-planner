@@ -1,0 +1,13 @@
+{
+  "name": "show-planner",
+  "version": "1.0.0",
+  "description": "Shared show itinerary and availability calendar for a band.",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
