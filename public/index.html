@@ -40,6 +40,7 @@
     </div>
     <nav class="wrap tabs">
       <a href="#shows">Shows</a>
+      <a href="#itinerary">Itinerary</a>
       <a href="#availability">Availability</a>
     </nav>
   </header>
@@ -58,6 +59,12 @@
         <summary>Past shows <span id="pastCount"></span></summary>
         <div id="pastList"></div>
       </details>
+    </section>
+
+    <!-- ITINERARY -->
+    <section id="tab-itinerary" class="tab" hidden>
+      <div class="picker" id="itinPicker"></div>
+      <div id="itinBody"></div>
     </section>
 
     <!-- AVAILABILITY -->
@@ -131,6 +138,20 @@
       <label class="f">Doors<input type="time" name="doors"></label>
       <label class="f">Set starts<input type="time" name="setStart"></label>
       <label class="f">Set ends<input type="time" name="setEnd"></label>
+    </fieldset>
+    <fieldset class="sched">
+      <legend>Day-of schedule</legend>
+      <div id="schedRows"></div>
+      <div class="quick">
+        <button type="button" data-quick="Meet at rehearsal space">Meet up</button>
+        <button type="button" data-quick="Leave for venue">Leave for venue</button>
+        <button type="button" data-quick="Line check">Line check</button>
+        <button type="button" data-quick="Dinner">Dinner</button>
+        <button type="button" data-quick="Merch table set up">Merch</button>
+        <button type="button" data-quick="Load-out">Load-out</button>
+        <button type="button" data-quick="Hotel check-in">Hotel</button>
+        <button type="button" id="addStep" class="add">+ Custom step</button>
+      </div>
     </fieldset>
     <div class="two">
       <label class="f">Venue contact<input name="contact" maxlength="120" placeholder="Name, phone or email"></label>

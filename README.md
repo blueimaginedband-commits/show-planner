@@ -1,6 +1,10 @@
 # Show Planner
 
-A small shared website for a band: a **shows itinerary** (venue, load-in, soundcheck, doors, set times, contact, deal, notes) and an **availability calendar** where everyone marks the dates they're Free, Maybe or Busy. It suggests the best open dates to book and shows who can make each gig.
+A small shared website for a band:
+
+- **Shows:** venue, load-in, soundcheck, doors, set times, contact, deal and notes for every gig.
+- **Itinerary:** a day-of timeline for each show that mixes the venue times with your own steps (meet up, leave, dinner, load-out, hotel). One tap copies it as text for the group chat.
+- **Availability:** everyone marks dates Free, Maybe or Busy, optionally with a time window like "after 6 PM" or "until 10 PM". It suggests the best open dates and flags anyone who'd miss load-in or leave before the set ends.
 
 - No accounts. Bandmates open the link, enter the band passcode once, and pick their name.
 - Updates from other people appear within about 5 seconds.

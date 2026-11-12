@@ -46,6 +46,19 @@ const time = (v) => (typeof v === 'string' && TIME_RE.test(v) ? v : '');
 const RESERVED = new Set(['__proto__', 'constructor', 'prototype']);
 const cleanName = (v) => { const n = str(v, 40).replace(/\s+/g, ' '); return RESERVED.has(n) ? '' : n; };
 
+// An availability entry is either a status string or { s, from, to } with optional times.
+function cleanEntry(v) {
+  if (typeof v === 'string') return STATUSES.has(v) ? v : null;
+  if (!v || typeof v !== 'object' || !STATUSES.has(v.s)) return null;
+  const from = v.s === 'busy' ? '' : time(v.from);
+  const to = v.s === 'busy' ? '' : time(v.to);
+  if (!from && !to) return v.s;
+  const e = { s: v.s };
+  if (from) e.from = from;
+  if (to) e.to = to;
+  return e;
+}
+
 function cleanShow(input, prev) {
   const s = {
     id: prev ? prev.id : crypto.randomUUID(),
@@ -62,6 +75,9 @@ function cleanShow(input, prev) {
     contact: str(input.contact, 120),
     pay: str(input.pay, 60),
     notes: str(input.notes, 2000),
+    schedule: (Array.isArray(input.schedule) ? input.schedule : []).slice(0, 40)
+      .map((it) => ({ time: time(it && it.time), label: str(it && it.label, 80), note: str(it && it.note, 300) }))
+      .filter((it) => it.label),
     createdBy: prev ? prev.createdBy : cleanName(input.by),
     updatedBy: cleanName(input.by),
     createdAt: prev ? prev.createdAt : Date.now(),
@@ -153,8 +169,9 @@ const server = http.createServer(async (req, res) => {
       const name = cleanName(body.name);
       if (!name) return send(res, 400, { error: 'Name is required.' });
       const dates = {};
-      for (const [d, s] of Object.entries(body.dates || {})) {
-        if (DATE_RE.test(d) && STATUSES.has(s)) dates[d] = s;
+      for (const [d, v] of Object.entries(body.dates || {})) {
+        const e = DATE_RE.test(d) ? cleanEntry(v) : null;
+        if (e) dates[d] = e;
       }
       if (Object.keys(dates).length > 1500) return send(res, 400, { error: 'Too many dates.' });
       db.availability[name] = dates;
