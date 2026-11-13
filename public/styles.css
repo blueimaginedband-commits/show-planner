@@ -274,3 +274,34 @@ textarea{min-height:80px;resize:vertical}
 .best .win{font-size:13px;color:var(--ink);margin-top:2px}
 .best .dur{font-size:11px;font-weight:700;color:var(--muted);margin-left:6px}
 .best-sub{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--muted);margin:16px 0 8px}
+
+/* ---------- best rehearsal times (day panel) ---------- */
+.rehearse{margin-top:12px;padding:14px;border-radius:14px;background:var(--panel-2);border:1px solid var(--line)}
+.r-head{font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--prac)}
+.r-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:8px}
+.r-list li{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
+.r-list li.r-first{border-color:rgba(62,199,214,.55);background:linear-gradient(135deg,rgba(62,199,214,.14),rgba(62,199,214,.02))}
+.r-main{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.r-time{font-weight:700;font-size:16px}
+.r-time .dur{font-size:11px;font-weight:700;color:var(--muted);margin-left:8px}
+.r-count{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;background:rgba(255,255,255,.06);color:var(--muted);white-space:nowrap}
+.r-count.all{background:rgba(63,184,120,.18);color:var(--free)}
+.r-who{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.r-who span{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(63,184,120,.14);color:var(--free)}
+.r-who span.maybe{background:rgba(232,178,58,.14);color:var(--maybe)}
+.r-miss{font-size:12px;color:var(--muted);margin-top:6px}
+.r-plan{font-size:13px;margin-top:8px;color:var(--prac)}
+.chart{margin-top:14px}
+.c-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px}
+.c-row{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center;margin-bottom:6px}
+.c-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-track{position:relative;height:18px;border-radius:6px;background:rgba(255,255,255,.04);overflow:hidden}
+.c-track i{position:absolute;top:3px;bottom:3px;border-radius:4px;background:var(--free)}
+.c-track i.maybe{background:var(--maybe)}
+.c-track.busy{background:repeating-linear-gradient(135deg,rgba(226,87,76,.18) 0 6px,transparent 6px 12px)}
+.c-track em{position:absolute;left:8px;top:1px;font-style:normal;font-size:11px;color:var(--muted)}
+.c-best{position:absolute;top:0;bottom:0;background:rgba(62,199,214,.18);border-left:1px dashed var(--prac);border-right:1px dashed var(--prac)}
+.c-axis{position:relative;height:14px}
+.c-axis span{position:absolute;transform:translateX(-50%);font-size:10px;color:var(--muted);white-space:nowrap}
+.pill.part{background:rgba(255,255,255,.06);color:var(--muted)}
+.r-note{font-size:13px;color:var(--maybe);margin:8px 0 0}

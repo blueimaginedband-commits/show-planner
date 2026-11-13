@@ -588,17 +588,92 @@
     queueSave(); renderCalendar(); renderDetail(); renderBest(); renderMembers(); renderShows(); renderItinerary();
   }
 
+  /* ---------- best rehearsal times ---------- */
+  // Split a day into time windows and list who is free (or maybe) in each one.
+  function slots(date) {
+    const ppl = members();
+    const av = ppl.map((n) => ({ n, e: entry(n, date) }))
+      .filter((x) => x.e.s === 'free' || x.e.s === 'maybe')
+      .map((x) => { const [a, b] = span(x.e); return { ...x, a, b: Math.min(b, 1440) }; });
+    const pts = [...new Set(av.flatMap((x) => [x.a, x.b]))].sort((p, q) => p - q);
+    const segs = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const who = av.filter((x) => x.a <= a && x.b >= b);
+      if (!who.length) continue;
+      const key = who.map((x) => x.n + ':' + x.e.s).join(',');
+      const last = segs[segs.length - 1];
+      if (last && last.key === key && last.b === a) last.b = b;
+      else segs.push({ a, b, who, key });
+    }
+    segs.forEach((g) => { g.free = g.who.filter((x) => x.e.s === 'free').length; g.maybe = g.who.length - g.free; });
+    return { ppl, av, segs };
+  }
+  function bestSlots(date, n = 3) {
+    const { segs } = slots(date);
+    let c = segs.filter((g) => g.b - g.a >= 60);
+    if (!c.length) c = segs.slice();
+    return c.sort((x, y) => y.free - x.free || y.maybe - x.maybe || (y.b - y.a) - (x.b - x.a) || x.a - y.a).slice(0, n);
+  }
+  function planBtn(k, cls, label, win) {
+    if (!win) { const b = bestSlots(k, 1)[0]; win = b ? [b.a, b.b] : null; }
+    let from = '', to = '';
+    if (win && !(win[0] === 0 && win[1] >= 1440)) { if (win[0] > 0) from = minToTime(win[0]); if (win[1] < 1440) to = minToTime(win[1]); }
+    return `<button class="${cls}" type="button" data-new="${k}" data-type="practice" data-from="${from}" data-to="${to}">${label || '+ Plan practice'}</button>`;
+  }
+  const shortHr = (m) => { const h = Math.floor((m % 1440) / 60), mm = m % 60; return (h % 12 || 12) + (mm ? ':' + pad(mm) : '') + (h < 12 ? 'a' : 'p'); };
+  function chartHtml(k, top) {
+    const { ppl, av } = slots(k);
+    const marks = [...av.map((x) => x.a).filter((a) => a > 0), ...av.map((x) => x.b).filter((b) => b < 1440)];
+    if (!marks.length) return ''; // everyone is all-day or nobody's free: nothing to chart
+    let lo = Math.max(0, Math.floor((Math.min(...marks) - 60) / 60) * 60);
+    let hi = Math.min(1440, Math.ceil((Math.max(...marks) + 60) / 60) * 60);
+    if (hi - lo < 240) { hi = Math.min(1440, lo + 240); lo = Math.max(0, hi - 240); }
+    const pct = (m) => ((Math.min(Math.max(m, lo), hi) - lo) / (hi - lo)) * 100;
+    const step = hi - lo > 600 ? 180 : hi - lo > 360 ? 120 : 60;
+    const ticks = [];
+    for (let t = Math.ceil(lo / step) * step; t <= hi; t += step) ticks.push(`<span style="left:${pct(t)}%">${shortHr(t)}</span>`);
+    const hl = top ? `<b class="c-best" style="left:${pct(top.a)}%;width:${pct(top.b) - pct(top.a)}%"></b>` : '';
+    const rows = ppl.map((n) => {
+      const x = av.find((y) => y.n === n), st = entry(n, k).s;
+      const bar = x ? `<i class="${x.e.s}" style="left:${pct(x.a)}%;width:${Math.max(pct(x.b) - pct(x.a), 1)}%"></i>` : '';
+      return `<div class="c-row"><span class="c-name" title="${esc(n)}">${esc(n)}</span><div class="c-track${st === 'busy' ? ' busy' : !st ? ' none' : ''}">${hl}${bar}${st === 'busy' ? '<em>Busy</em>' : !st ? '<em>No answer</em>' : ''}</div></div>`;
+    }).join('');
+    return `<div class="chart"><div class="c-title">Who’s free when</div>${rows}<div class="c-row"><span class="c-name"></span><div class="c-axis">${ticks.join('')}</div></div></div>`;
+  }
+  function rehearseHtml(k, isPast) {
+    const { ppl } = slots(k);
+    if (!ppl.length) return '';
+    const best = bestSlots(k);
+    if (!best.length) return `<div class="rehearse"><div class="r-head">Best rehearsal times</div><p class="muted small" style="margin:6px 0 0">Nobody’s marked free on this day yet.</p></div>`;
+    const total = ppl.length;
+    const rows = best.map((g, i) => {
+      const everyone = g.free === total;
+      const missing = ppl.filter((n) => !g.who.some((x) => x.n === n));
+      const d = durText([g.a, g.b]);
+      return `<li class="${i === 0 ? 'r-first' : ''}">
+        <div class="r-main"><div class="r-time">${esc(spanText([g.a, g.b]))}${d ? `<span class="dur">${d}</span>` : ''}</div>
+          <span class="r-count${everyone ? ' all' : ''}">${everyone ? 'Everyone' : g.who.length + ' of ' + total}</span></div>
+        <div class="r-who">${g.who.map((x) => `<span class="${x.e.s}">${esc(x.n)}${x.e.s === 'maybe' ? ' (maybe)' : ''}</span>`).join('')}</div>
+        ${missing.length ? `<div class="r-miss">Missing ${esc(missing.join(', '))}</div>` : ''}
+        ${!isPast ? planBtn(k, 'linkbtn r-plan', 'Plan practice at this time →', [g.a, g.b]) : ''}
+      </li>`;
+    }).join('');
+    const note = total > 1 && best[0].who.length < 2 ? `<p class="r-note">Nobody\u2019s free hours overlap on this day yet. These are the times each person is free.</p>` : '';
+    return `<div class="rehearse"><div class="r-head">Best rehearsal times</div>${note}<ol class="r-list">${rows}</ol>${chartHtml(k, best[0])}</div>`;
+  }
+
   function renderDetail() {
     const el = $('#dayDetail');
     if (!S.sel) {
       const n = Object.keys(S.myDates).filter((d) => d >= todayIso()).length;
-      el.innerHTML = `<h3>${S.mode === 'mine' ? 'Your dates' : 'Pick a date'}</h3><p class="muted small" style="margin:0">${S.mode === 'mine' ? `Tap dates on the calendar to mark when you can play. You’ve marked ${n} upcoming date${n === 1 ? '' : 's'}.` : 'Tap any date to see who can make it.'}</p>`;
+      el.innerHTML = `<h3>${S.mode === 'mine' ? 'Your dates' : 'Pick a date'}</h3><p class="muted small" style="margin:0">${S.mode === 'mine' ? `Tap dates on the calendar to mark when you can play. You’ve marked ${n} upcoming date${n === 1 ? '' : 's'}.` : 'Tap any date to see the best rehearsal times.'}</p>`;
       return;
     }
     const k = S.sel, gigs = showsOn(k), ppl = members(), isPast = k < todayIso();
     const groups = { free: [], maybe: [], busy: [], '': [] };
     ppl.forEach((n) => groups[statusOf(n, k)].push(n));
-    const gig = gigs[0];
+    const gig = gigs.find((g) => !isPractice(g)) || gigs[0];
     const list = (label, arr) => arr.length ? `<div class="muted small" style="margin-top:10px">${label}</div><div class="who" style="margin-top:4px">${arr.map((n) => personChip(n, k, gig)).join('')}</div>` : '';
     const mine = entry(S.me, k);
     const timeRow = mine.s === 'free' || mine.s === 'maybe' ? `
@@ -614,28 +689,15 @@
       </div>` : '';
     el.innerHTML = `<h3>${esc(fmtLong(k))}</h3>
       ${gigs.map((g) => isPractice(g)
-        ? `<button type="button" class="gig-link" data-edit="${esc(g.id)}"><span class="sw prac"></span> <b>Practice</b>${g.setStart ? ' \u00b7 ' + fmtTime(g.setStart) : ''}${g.setEnd ? '\u2013' + fmtTime(g.setEnd) : ''}</button>`
-        : `<button type="button" class="gig-link" data-itin="${esc(g.id)}"><span class="sw gig"></span> <b>${esc(g.venue)}</b>${g.setStart ? ' \u00b7 set ' + fmtTime(g.setStart) : ''} \u2192</button>`).join('')}
-      ${overlapHtml(k)}
-      ${!isPast ? `<div class="muted small" style="margin-top:10px">Your answer</div><div class="status-pick">
-        ${['free', 'maybe', 'busy'].map((s) => `<button type="button" class="${s}${mine.s === s ? ' on' : ''}" data-set="${s}">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}
+        ? `<button type="button" class="gig-link" data-edit="${esc(g.id)}"><span class="sw prac"></span> <b>Practice</b>${g.setStart ? ' · ' + fmtTime(g.setStart) : ''}${g.setEnd ? '–' + fmtTime(g.setEnd) : ''}</button>`
+        : `<button type="button" class="gig-link" data-itin="${esc(g.id)}"><span class="sw gig"></span> <b>${esc(g.venue)}</b>${g.setStart ? ' · set ' + fmtTime(g.setStart) : ''} →</button>`).join('')}
+      ${rehearseHtml(k, isPast)}
+      ${!isPast ? `<div class="muted small" style="margin-top:14px">Your answer</div><div class="status-pick">
+        ${['free', 'maybe', 'busy'].map((st) => `<button type="button" class="${st}${mine.s === st ? ' on' : ''}" data-set="${st}">${st[0].toUpperCase() + st.slice(1)}</button>`).join('')}
         ${mine.s ? '<button type="button" data-set="">Clear</button>' : ''}
       </div>${timeRow}` : ''}
-      ${list('Free', groups.free)}${list('Maybe', groups.maybe)}${list('Busy', groups.busy)}${list('No answer yet', groups[''])}
+      ${gig && !isPractice(gig) ? list('Free', groups.free) + list('Maybe', groups.maybe) : ''}${list('Busy', groups.busy)}${list('No answer yet', groups[''])}
       ${!isPast ? `<div class="btn-row" style="margin-top:14px">${planBtn(k, 'btn small')}<button class="btn ghost small" type="button" data-new="${k}">+ Add show</button></div>` : ''}`;
-  }
-  function planBtn(k, cls, label) {
-    const g = groupWindow(k);
-    let from = '', to = '';
-    if (g.win && !(g.win[0] === 0 && g.win[1] >= 1440)) { if (g.win[0] > 0) from = minToTime(g.win[0]); if (g.win[1] < 1440) to = minToTime(g.win[1]); }
-    return `<button class="${cls}" type="button" data-new="${k}" data-type="practice" data-from="${from}" data-to="${to}">${label || '+ Plan practice'}</button>`;
-  }
-  function overlapHtml(k) {
-    const g = groupWindow(k);
-    if (!g.ppl.length || !g.free.length) return '';
-    if (g.all && g.win) return `<div class="overlap all"><b>Everyone\u2019s free</b> \u00b7 ${esc(spanText(g.win))}${durText(g.win) ? ` (${durText(g.win)})` : ''}</div>`;
-    if (g.all) return `<div class="overlap some">Everyone\u2019s free, but their times don\u2019t overlap.</div>`;
-    return `<div class="overlap some">${g.free.length} of ${g.ppl.length} free${g.win ? ' \u00b7 overlap ' + esc(spanText(g.win)) : ''}. Waiting on ${esc(g.notFree.map((x) => x.n).join(', '))}.</div>`;
   }
   $('#dayDetail').addEventListener('click', (e) => {
     if (!S.sel) return;
@@ -653,27 +715,29 @@
   });
 
   function renderBest() {
-    const all = [], almost = [];
-    const ppl = members();
-    if (ppl.length) {
+    const ppl = members(), out = [];
+    if (ppl.length > 1) {
       const d = parse(todayIso());
       for (let i = 0; i < 60; i++, d.setDate(d.getDate() + 1)) {
         const k = iso(d); if (showsOn(k).length) continue;
-        const g = groupWindow(k);
-        const long = g.win && g.win[1] - g.win[0] >= 60;
-        if (g.all && long) all.push({ k, g });
-        else if (ppl.length > 1 && g.notFree.length === 1 && long) almost.push({ k, g });
+        const g = bestSlots(k, 1)[0];
+        if (g && g.b - g.a >= 60 && g.who.length >= 2) out.push({ k, g });
       }
+      out.sort((x, y) => y.g.free - x.g.free || y.g.who.length - x.g.who.length || x.k.localeCompare(y.k));
     }
-    const row = (r, missing) => `<li><div><b>${esc(fmtShort(r.k))}</b>
-        <div class="win">${esc(spanText(r.g.win))}${durText(r.g.win) ? `<span class="dur">${durText(r.g.win)}</span>` : ''}</div>
-        ${missing ? `<div class="sub">Needs ${esc(r.g.notFree[0].n)} (${{ maybe: 'maybe', busy: 'busy', '': 'no answer' }[r.g.notFree[0].e.s]})</div>` : ''}</div>
-        ${planBtn(r.k, 'btn ghost small', 'Plan')}</li>`;
-    let html = '';
-    if (all.length) html += '<ul class="best">' + all.slice(0, 8).map((r) => row(r, false)).join('') + '</ul>';
-    if (almost.length && all.length < 5) html += `<div class="best-sub">One person away</div><ul class="best">${almost.slice(0, 5 - Math.min(all.length, 4)).map((r) => row(r, true)).join('')}</ul>`;
-    if (!html) html = `<p class="muted small" style="margin:0">${ppl.length < 2 ? 'Once bandmates mark their dates, the times you\u2019re all free show up here.' : 'No day yet where everyone\u2019s free for at least an hour. Ask the band to fill in more dates.'}</p>`;
-    $('#bestDates').innerHTML = html;
+    const total = ppl.length;
+    $('#bestDates').innerHTML = out.length ? '<ul class="best">' + out.slice(0, 8).map(({ k, g }) => {
+      const everyone = g.free === total;
+      const missing = ppl.filter((n) => !g.who.some((x) => x.n === n));
+      const maybes = g.who.filter((x) => x.e.s === 'maybe').map((x) => x.n);
+      const d = durText([g.a, g.b]);
+      const sub = [missing.length ? 'Missing ' + missing.join(', ') : '', maybes.length ? maybes.join(', ') + ' maybe' : ''].filter(Boolean).join(' · ');
+      return `<li><div><b>${esc(fmtShort(k))}</b><span class="pill${everyone ? '' : ' part'}">${everyone ? 'Everyone' : g.who.length + '/' + total}</span>
+        <div class="win">${esc(spanText([g.a, g.b]))}${d ? `<span class="dur">${d}</span>` : ''}</div>
+        ${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
+        ${planBtn(k, 'btn ghost small', 'Plan', [g.a, g.b])}</li>`;
+    }).join('') + '</ul>'
+      : `<p class="muted small" style="margin:0">${ppl.length < 2 ? 'Once bandmates mark their dates, the best rehearsal times show up here.' : 'No day yet where at least two people overlap for an hour. Ask the band to fill in more dates.'}</p>`;
   }
 
   function renderMembers() {
