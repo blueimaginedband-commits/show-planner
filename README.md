@@ -6,7 +6,7 @@ A small shared website for a band:
 - **Itinerary:** a day-of timeline for each show that mixes the venue times with your own steps (meet up, leave, dinner, load-out, hotel). One tap copies it as text for the group chat.
 - **Best rehearsal times:** tap a day to see its top time windows ranked by how many people can make them (with who's in and who's missing), plus a chart of everyone's free hours. The side list shows each day's best window for the next 60 days. One tap plans a practice in that window.
 - **Practices:** plan rehearsals (date, time, place, what to work on) alongside shows.
-- **Availability:** everyone marks dates Free, Maybe or Busy, optionally with a time window like "after 6 PM" or "until 10 PM". It suggests the best open dates and flags anyone who'd miss load-in or leave before the set ends.
+- **Availability:** everyone marks dates Free, Maybe or Busy, optionally with a time window like "after 6 PM" or "until 10 PM". **Copy last week**, **Repeat for 4 weeks** and **Same as last Monday** save re-entering a regular schedule (with Undo). It suggests the best open dates and flags anyone who'd miss load-in or leave before the set ends.
 
 - No accounts. Bandmates open the link, enter the band passcode once, and pick their name.
 - Updates from other people appear within about 5 seconds.

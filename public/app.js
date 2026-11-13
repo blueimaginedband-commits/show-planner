@@ -542,6 +542,7 @@
     $('#monthLabel').textContent = S.month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     const startDow = new Date(y, m, 1).getDay();
     const today = todayIso(), ppl = members();
+    const wk = weekDays(curWeek());
     let html = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => `<div class="dow-h">${d}</div>`).join('');
     const start = new Date(y, m, 1 - startDow);
     for (let i = 0; i < 42; i++) {
@@ -555,6 +556,7 @@
       if (isPast) cls += ' past';
       if (k === today) cls += ' today';
       if (S.sel === k) cls += ' sel';
+      if (S.mode === 'mine' && wk.includes(k)) cls += ' wk';
       if (S.mode === 'mine') {
         const e = entry(S.me, k); if (e.s) cls += ' ' + e.s;
         const w = winLabel(e, true); if (w) inner = `<span class="win">${esc(w)}</span>`;
@@ -567,6 +569,7 @@
       html += `<button type="button" class="${cls}" data-day="${k}" ${inMonth ? '' : 'tabindex="-1"'}><span class="n">${d.getDate()}</span>${inner}${gig}</button>`;
     }
     $('#cal').innerHTML = html;
+    renderWeekBar();
   }
   $('#cal').addEventListener('click', (e) => {
     const b = e.target.closest('[data-day]'); if (!b || b.classList.contains('out')) return;
@@ -575,11 +578,74 @@
       const cur = entry(S.me, k);
       setMine(k, { ...cur, s: CYCLE[cur.s] });
     }
-    S.sel = k; renderCalendar(); renderDetail();
+    S.sel = k; S.week = weekStart(k); renderCalendar(); renderDetail();
   });
   $('#prevMonth').addEventListener('click', () => { S.month = new Date(S.month.getFullYear(), S.month.getMonth() - 1, 1); renderCalendar(); });
   $('#nextMonth').addEventListener('click', () => { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + 1, 1); renderCalendar(); });
   document.querySelector('.seg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.mode = b.dataset.mode; renderCalendar(); renderDetail(); });
+
+  /* ---------- copy / repeat weeks ---------- */
+  const addDays = (k, n) => { const d = parse(k); d.setDate(d.getDate() + n); return iso(d); };
+  const weekStart = (k) => addDays(k, -parse(k).getDay());
+  const weekDays = (ws) => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(ws, i));
+  const curWeek = () => S.week || weekStart(S.sel || todayIso());
+  const hasAny = (ws) => weekDays(ws).some((k) => S.myDates[k] !== undefined);
+  const dayName = (k) => parse(k).toLocaleDateString(undefined, { weekday: 'long' });
+  const cloneV = (v) => (v && typeof v === 'object' ? { ...v } : v);
+
+  function renderWeekBar() {
+    const bar = $('#weekBar');
+    if (S.mode !== 'mine') { bar.hidden = true; return; }
+    bar.hidden = false;
+    const ws = curWeek(), we = addDays(ws, 6), today = todayIso();
+    const fmt = (k) => parse(k).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const canCopy = hasAny(addDays(ws, -7)) && we >= today;
+    const canRepeat = hasAny(ws);
+    bar.innerHTML = `
+      <div class="wb-nav">
+        <button type="button" class="iconbtn sm" data-wk="-7" aria-label="Previous week">&#8249;</button>
+        <span>Week of <b>${fmt(ws)} \u2013 ${fmt(we)}</b></span>
+        <button type="button" class="iconbtn sm" data-wk="7" aria-label="Next week">&#8250;</button>
+      </div>
+      <div class="wb-acts">
+        <button type="button" class="btn ghost small" data-copy="last" ${canCopy ? '' : 'disabled'} title="${canCopy ? 'Copy your answers from the week before' : 'Nothing marked the week before'}">Copy last week</button>
+        <button type="button" class="btn ghost small" data-copy="repeat" ${canRepeat ? '' : 'disabled'} title="${canRepeat ? 'Copy this week into the next 4 weeks' : 'Mark some days this week first'}">Repeat for 4 weeks</button>
+        ${S.undo ? '<button type="button" class="linkbtn small" data-copy="undo">Undo</button>' : ''}
+      </div>`;
+  }
+  // Copy my answers from one week into other weeks. Past days and blank source days are left alone.
+  function copyWeeks(fromWs, toWsList) {
+    const before = { ...S.myDates };
+    let n = 0;
+    const today = todayIso();
+    toWsList.forEach((ts) => weekDays(ts).forEach((k, i) => {
+      if (k < today) return;
+      const src = S.myDates[addDays(fromWs, i)];
+      if (src === undefined) return;
+      S.myDates[k] = cloneV(src); n++;
+    }));
+    if (!n) { toast('Nothing to copy into upcoming days.'); return; }
+    S.undo = before;
+    clearTimeout(undoT); undoT = setTimeout(() => { S.undo = null; renderWeekBar(); }, 30000);
+    queueSave(); renderAvailAll();
+    toast(`Copied to ${n} day${n === 1 ? '' : 's'}. Tap Undo if that wasn\u2019t right.`);
+  }
+  let undoT;
+  function renderAvailAll() { renderCalendar(); renderDetail(); renderBest(); renderMembers(); renderShows(); renderItinerary(); }
+  $('#weekBar').addEventListener('click', (e) => {
+    const nav = e.target.closest('[data-wk]');
+    if (nav) {
+      S.week = addDays(curWeek(), Number(nav.dataset.wk));
+      const mid = parse(addDays(S.week, 3));
+      S.month = new Date(mid.getFullYear(), mid.getMonth(), 1);
+      renderCalendar(); return;
+    }
+    const b = e.target.closest('[data-copy]'); if (!b) return;
+    const ws = curWeek();
+    if (b.dataset.copy === 'last') copyWeeks(addDays(ws, -7), [ws]);
+    else if (b.dataset.copy === 'repeat') copyWeeks(ws, [7, 14, 21, 28].map((n) => addDays(ws, n)));
+    else if (b.dataset.copy === 'undo' && S.undo) { S.myDates = S.undo; S.undo = null; queueSave(); renderAvailAll(); toast('Undone'); }
+  });
 
   function setMine(date, e) {
     if (e.s === 'busy' || !e.s) { e.from = ''; e.to = ''; }
@@ -663,6 +729,14 @@
     return `<div class="rehearse"><div class="r-head">Best rehearsal times</div>${note}<ol class="r-list">${rows}</ol>${chartHtml(k, best[0])}</div>`;
   }
 
+  function sameAsLast(k) {
+    const prev = addDays(k, -7), v = S.myDates[prev];
+    if (v === undefined) return '';
+    const e = norm(v), w = winLabel(e);
+    const label = { free: 'Free', maybe: 'Maybe', busy: 'Busy' }[e.s] + (w ? ' ' + w : '');
+    if (JSON.stringify(v) === JSON.stringify(S.myDates[k])) return '';
+    return `<button type="button" class="same-last" data-same="${prev}">\u21bb Same as last ${esc(dayName(prev))} <span>(${esc(label)})</span></button>`;
+  }
   function renderDetail() {
     const el = $('#dayDetail');
     if (!S.sel) {
@@ -695,7 +769,7 @@
       ${!isPast ? `<div class="muted small" style="margin-top:14px">Your answer</div><div class="status-pick">
         ${['free', 'maybe', 'busy'].map((st) => `<button type="button" class="${st}${mine.s === st ? ' on' : ''}" data-set="${st}">${st[0].toUpperCase() + st.slice(1)}</button>`).join('')}
         ${mine.s ? '<button type="button" data-set="">Clear</button>' : ''}
-      </div>${timeRow}` : ''}
+      </div>${timeRow}${sameAsLast(k)}` : ''}
       ${gig && !isPractice(gig) ? list('Free', groups.free) + list('Maybe', groups.maybe) : ''}${list('Busy', groups.busy)}${list('No answer yet', groups[''])}
       ${!isPast ? `<div class="btn-row" style="margin-top:14px">${planBtn(k, 'btn small')}<button class="btn ghost small" type="button" data-new="${k}">+ Add show</button></div>` : ''}`;
   }
@@ -703,6 +777,8 @@
     if (!S.sel) return;
     const b = e.target.closest('[data-set]');
     if (b) { const cur = entry(S.me, S.sel); return setMine(S.sel, { ...cur, s: b.dataset.set }); }
+    const sm = e.target.closest('[data-same]');
+    if (sm) { return setMine(S.sel, norm(S.myDates[sm.dataset.same])); }
     const w = e.target.closest('[data-win]');
     if (w) { const [from, to] = w.dataset.win.split('|'); const cur = entry(S.me, S.sel); return setMine(S.sel, { ...cur, from, to }); }
   });
