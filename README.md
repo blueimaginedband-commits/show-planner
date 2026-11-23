@@ -1,4 +1,4 @@
-# Show Planner
+# Practice Planner
 
 A small shared website for a band:
 

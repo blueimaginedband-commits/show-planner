@@ -1,10 +1,10 @@
 {
-  "name": "Band Planner",
-  "short_name": "Band Planner",
+  "name": "Practice Planner",
+  "short_name": "Practice",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fbf6ef",
-  "theme_color": "#e8743b",
+  "background_color": "#f4f5fa",
+  "theme_color": "#3346d3",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }

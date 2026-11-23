@@ -147,7 +147,8 @@
   let gateNames = [];
   async function showGate(err) {
     $('#app').hidden = true; $('#gate').hidden = false;
-    $('#gateTitle').textContent = S.config.bandName || 'Show Planner';
+    $('#gateTitle').textContent = 'Practice Planner';
+    $('#gateSub').textContent = S.config.bandName ? `Find the time when all of ${S.config.bandName} can play.` : 'Find the time when the whole band can play.';
     $('#passWrap').hidden = !S.config.needsPasscode;
     $('#passInput').value = S.pass;
     $('#nameInput').value = S.me;
@@ -207,12 +208,15 @@
   }
   addEventListener('hashchange', () => { showTab(); scrollTo(0, 0); });
 
+  const initialsOf = (n) => (n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+
   /* ---------- render ---------- */
   function render() {
     if ($('#app').hidden) return;
-    $('#bandName').textContent = S.config.bandName || 'Our Shows';
-    document.title = (S.config.bandName ? S.config.bandName + ' · ' : '') + 'Show Planner';
+    $('#bandName').textContent = S.config.bandName || '';
+    document.title = (S.config.bandName ? S.config.bandName + ' · ' : '') + 'Practice Planner';
     $('#meName').textContent = S.me;
+    $('#meAv').textContent = initialsOf(S.me);
     renderBanner(); renderShows(); renderItinerary(); renderCalendar(); renderDetail(); renderBest(); renderMembers();
   }
   function renderBanner() {
@@ -595,13 +599,14 @@
   /* ---------- welcome strip ---------- */
   function renderWelcome() {
     const el = $('#welcome'); if (!el) return;
+    el.className = 'welcome ' + (S.mode === 'mine' ? 'is-mine' : 'is-band');
     const today = todayIso();
     const next14 = [...Array(14)].map((_, i) => addDays(today, i));
     const filled = next14.filter((k) => S.myDates[k] !== undefined).length;
     if (S.mode === 'mine') {
       const pct = Math.round((filled / 14) * 100);
       el.innerHTML = `<div class="wl-main">
-          <h2 class="wl-hi">Hi ${esc(S.me)}! When are you free?</h2>
+          <h2 class="wl-hi">Hey ${esc(S.me)}, when can you play?</h2>
           <ol class="wl-steps"><li><b>1</b> Tap a day</li><li><b>2</b> Pick a time <span>(optional)</span></li><li><b>3</b> Done, it saves itself</li></ol>
         </div>
         <div class="wl-side">
@@ -624,7 +629,7 @@
           <h2 class="wl-hi">${esc(fmtDay(best.k))} \u00b7 ${esc(spanText([best.g.a, best.g.b]))}</h2>
           <div class="wl-who">${best.g.free === ppl.length ? 'Everyone\u2019s free' : `${best.g.who.length} of ${ppl.length} free \u00b7 missing ${esc(ppl.filter((n) => !best.g.who.some((x) => x.n === n)).join(', '))}`}</div>
         </div>
-        <div class="wl-side">${planBtn(best.k, 'btn', 'Plan practice', [best.g.a, best.g.b])}
+        <div class="wl-side">${planBtn(best.k, 'btn amber', 'Plan practice', [best.g.a, best.g.b])}
           <button type="button" class="linkbtn small" data-goto="mine">Update my times \u2192</button></div>${waitingHtml()}`
         : `<div class="wl-main"><h2 class="wl-hi">No overlap yet</h2><div class="wl-who">Once a couple of people fill in their times, the best one shows up here.</div></div>
            <div class="wl-side"><button type="button" class="btn" data-goto="mine">Add my times</button></div>${waitingHtml()}`;
