@@ -417,3 +417,17 @@ textarea{min-height:80px;resize:vertical}
   body.has-sheet main{padding-bottom:58vh}
 }
 @keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+
+/* ---------- usual week + reminders ---------- */
+.wl-wait{flex-basis:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:2px;padding-top:12px;border-top:1px solid var(--line);font-size:14px}
+.wl-wait em{font-style:normal;color:var(--muted)}
+.uw-rows{display:grid;gap:8px}
+.uw-row{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:10px;font-weight:600}
+.uw-row select{padding:9px 10px}
+.uw-opts{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:14px}
+.uw-weeks{display:flex;align-items:center;gap:8px}
+.uw-weeks select{width:auto;padding:7px 10px}
+.uw-keep{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.uw-keep input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+@media (max-width:480px){.uw-row{grid-template-columns:1fr;gap:4px}}
+#usualForm .actions{position:sticky;bottom:-22px;margin:0 -22px -22px;padding:12px 22px 18px;background:var(--panel);border-top:1px solid var(--line)}

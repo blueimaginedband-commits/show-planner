@@ -153,9 +153,11 @@
     $('#nameInput').value = S.me;
     $('#gateErr').textContent = err || '';
     gateNames = [];
+    let passOk = false;
     if (!S.config.needsPasscode || S.pass) {
-      try { const st = await api('GET', '/api/state'); gateNames = Object.keys(st.availability || {}).sort(); } catch {}
+      try { const st = await api('GET', '/api/state'); gateNames = Object.keys(st.availability || {}).sort(); passOk = true; } catch {}
     }
+    if (passOk) $('#passWrap').hidden = true;
     renderChips();
   }
   function renderChips() {
@@ -603,6 +605,7 @@
           <ol class="wl-steps"><li><b>1</b> Tap a day</li><li><b>2</b> Pick a time <span>(optional)</span></li><li><b>3</b> Done, it saves itself</li></ol>
         </div>
         <div class="wl-side">
+          <button type="button" class="btn${filled < 7 ? '' : ' ghost'}" data-usual="open">\u26a1 Fill in my usual week</button>
           <div class="wl-meter"><i style="width:${pct}%"></i></div>
           <div class="wl-count">${filled === 0 ? 'You haven\u2019t filled in the next 2 weeks yet' : filled >= 14 ? 'Next 2 weeks all filled in. Nice!' : `You\u2019ve filled in <b>${filled}</b> of the next 14 days`}</div>
           <button type="button" class="linkbtn small" data-goto="band">See when everyone\u2019s free \u2192</button>
@@ -622,14 +625,86 @@
           <div class="wl-who">${best.g.free === ppl.length ? 'Everyone\u2019s free' : `${best.g.who.length} of ${ppl.length} free \u00b7 missing ${esc(ppl.filter((n) => !best.g.who.some((x) => x.n === n)).join(', '))}`}</div>
         </div>
         <div class="wl-side">${planBtn(best.k, 'btn', 'Plan practice', [best.g.a, best.g.b])}
-          <button type="button" class="linkbtn small" data-goto="mine">Update my times \u2192</button></div>`
+          <button type="button" class="linkbtn small" data-goto="mine">Update my times \u2192</button></div>${waitingHtml()}`
         : `<div class="wl-main"><h2 class="wl-hi">No overlap yet</h2><div class="wl-who">Once a couple of people fill in their times, the best one shows up here.</div></div>
-           <div class="wl-side"><button type="button" class="btn" data-goto="mine">Add my times</button></div>`;
+           <div class="wl-side"><button type="button" class="btn" data-goto="mine">Add my times</button></div>${waitingHtml()}`;
+    }
+  }
+  // Who hasn't filled in much of the next 2 weeks?
+  function waiting() {
+    const today = todayIso();
+    const next14 = [...Array(14)].map((_, i) => addDays(today, i));
+    return members().map((n) => {
+      const dates = n === S.me ? S.myDates : (S.availability[n] || {});
+      return { n, c: next14.filter((k) => dates[k] !== undefined).length };
+    }).filter((x) => x.c < 4);
+  }
+  function waitingHtml() {
+    const w = waiting();
+    if (!members().length) return '';
+    return `<div class="wl-wait">${w.length
+      ? `<span><b>Still waiting on:</b> ${w.map((x) => `${esc(x.n)} <em>(${x.c ? x.c + ' of 14 days' : 'nothing yet'})</em>`).join(', ')}</span>`
+      : '<span><b>Everyone has filled in the next 2 weeks.</b></span>'}
+      <button type="button" class="btn ghost small" data-remind>Copy reminder for the group chat</button></div>`;
+  }
+  function inviteLink() {
+    const base = location.origin + '/';
+    return S.config.needsPasscode && S.pass ? base + '?code=' + encodeURIComponent(S.pass) : base;
+  }
+  function reminderText() {
+    const w = waiting().map((x) => x.n);
+    const hi = w.length === 0 ? 'Hey band!' : w.length === 1 ? `Hey ${w[0]}!` : `Hey ${w.slice(0, -1).join(', ')} and ${w[w.length - 1]}!`;
+    return `${hi} Can you fill in when you're free for the next couple of weeks so we can lock in practice? It takes about 30 seconds: tap "Fill in my usual week" and you're done.\n${inviteLink()}`;
+  }
+  async function copyText(text, ok) {
+    try { await navigator.clipboard.writeText(text); toast(ok); }
+    catch {
+      const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast(ok); } catch { toast('Couldn\u2019t copy on this device'); }
+      ta.remove();
     }
   }
   $('#welcome').addEventListener('click', (e) => {
+    if (e.target.closest('[data-remind]')) return copyText(reminderText(), 'Reminder copied. Paste it in the group chat.');
+    if (e.target.closest('[data-usual="open"]')) return openUsual();
     const g = e.target.closest('[data-goto]'); if (!g) return;
     S.mode = g.dataset.goto; renderCalendar(); renderDetail();
+  });
+
+  /* ---------- fill in my usual week ---------- */
+  const USUAL_OPTS = [['', '\u2014 Skip this day'], ['free||', 'Free all day'], ['free|17:00|', 'Free after 5 PM'], ['free|18:00|', 'Free after 6 PM'], ['free|19:00|', 'Free after 7 PM'], ['free||17:00', 'Free until 5 PM'], ['maybe||', 'Maybe'], ['busy||', 'Busy']];
+  const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  function openUsual() {
+    let saved = {};
+    try { saved = JSON.parse(store.get('sp_usual_' + S.me) || '{}'); } catch {}
+    $('#uwRows').innerHTML = DOW.map((d, i) => `<label class="uw-row"><span>${d}</span>
+      <select data-dow="${i}">${USUAL_OPTS.map(([v, l]) => `<option value="${v}"${(saved[i] || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`).join('');
+    $('#uwErr').textContent = '';
+    $('#usualModal').hidden = false;
+  }
+  $('#usualModal').addEventListener('click', (e) => { if (e.target.closest('[data-usual="close"]')) $('#usualModal').hidden = true; });
+  $('#usualForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const rules = {};
+    document.querySelectorAll('#uwRows select').forEach((sel) => { if (sel.value) rules[sel.dataset.dow] = sel.value; });
+    if (!Object.keys(rules).length) { $('#uwErr').textContent = 'Pick a time for at least one day.'; return; }
+    store.set('sp_usual_' + S.me, JSON.stringify(rules));
+    const weeks = Number($('#uwWeeks').value) || 4, keep = $('#uwKeep').checked, today = todayIso();
+    const before = { ...S.myDates };
+    let n = 0;
+    for (let i = 0; i < weeks * 7; i++) {
+      const k = addDays(today, i), r = rules[parse(k).getDay()];
+      if (!r || (keep && S.myDates[k] !== undefined)) continue;
+      const [st, from, to] = r.split('|');
+      const v = pack({ s: st, from, to });
+      if (v) { S.myDates[k] = v; n++; }
+    }
+    $('#usualModal').hidden = true;
+    if (!n) { toast('Those days were already filled in. Untick \u201cKeep days I\u2019ve already filled in\u201d to replace them.'); return; }
+    S.undo = before;
+    clearTimeout(undoT); undoT = setTimeout(() => { S.undo = null; renderWeekBar(); }, 60000);
+    queueSave(); renderAvailAll();
+    toast(`Filled in ${n} day${n === 1 ? '' : 's'}. You can still change any single day.`);
   });
 
   /* ---------- copy / repeat weeks ---------- */
@@ -716,7 +791,7 @@
         <div class="wb-acts">
           <button type="button" class="btn ghost small${S.copyMode === 'last' ? ' on' : ''}" data-copy="last" ${canCopy ? '' : 'disabled'} title="${canCopy ? 'Choose days to copy from the week before' : 'Nothing marked the week before'}">Copy from last week…</button>
           <button type="button" class="btn ghost small${S.copyMode === 'repeat' ? ' on' : ''}" data-copy="repeat" ${canRepeat ? '' : 'disabled'} title="${canRepeat ? 'Choose days to repeat for the next 4 weeks' : 'Mark some days this week first'}">Repeat for 4 weeks…</button>
-          ${S.undo ? '<button type="button" class="linkbtn small" data-copy="undo">Undo last copy</button>' : ''}
+          ${S.undo ? '<button type="button" class="linkbtn small" data-copy="undo">Undo</button>' : ''}
         </div>
       </div>
       ${S.copyMode ? pickerHtml() : ''}`;
@@ -738,7 +813,7 @@
     S.undo = before;
     clearTimeout(undoT); undoT = setTimeout(() => { S.undo = null; renderWeekBar(); }, 60000);
     queueSave(); renderAvailAll();
-    toast(`Copied ${n} day${n === 1 ? '' : 's'}. Tap “Undo last copy” if that wasn’t right.`);
+    toast(`Copied ${n} day${n === 1 ? '' : 's'}. Tap \u201cUndo\u201d if that wasn\u2019t right.`);
   }
   let undoT;
   function renderAvailAll() { renderCalendar(); renderDetail(); renderBest(); renderMembers(); renderShows(); renderItinerary(); }
@@ -986,9 +1061,11 @@
       const armed = S.armed === 'p:' + n;
       return `<div class="member"><span>${esc(n)}${n === S.me ? ' <span class="muted">(you)</span>' : ''} <span class="muted small">· ${c} free date${c === 1 ? '' : 's'}</span></span>
         ${n !== S.me ? `<button class="x" type="button" data-rm="${esc(n)}">${armed ? 'Confirm remove' : 'Remove'}</button>` : ''}</div>`;
-    }).join('')}</div><p class="muted small" style="margin:10px 0 0">Send bandmates the link${S.config.needsPasscode ? ' and passcode' : ''} so they can add their dates.</p>`;
+    }).join('')}</div><div class="invite"><p class="muted small" style="margin:10px 0 6px">Invite bandmates with this link${S.config.needsPasscode ? '. The passcode is built in, so they just pick their name' : ''}.</p>
+      <button type="button" class="btn ghost small" data-invite>Copy invite link</button></div>`;
   }
   $('#members').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-invite]')) return copyText(inviteLink(), 'Invite link copied');
     const b = e.target.closest('[data-rm]'); if (!b) return;
     const n = b.dataset.rm, key = 'p:' + n;
     if (S.armed !== key) { S.armed = key; renderMembers(); setTimeout(() => { if (S.armed === key) { S.armed = null; renderMembers(); } }, 4000); return; }
@@ -1020,6 +1097,8 @@
 
   /* ---------- boot ---------- */
   (async function boot() {
+    const code = new URLSearchParams(location.search).get('code');
+    if (code) { S.pass = code; store.set('sp_pass', code); history.replaceState(null, '', location.pathname + location.hash); }
     try { S.config = await (await fetch('/api/config')).json(); } catch {}
     if (!S.me) return showGate();
     try { apply(await api('GET', '/api/state')); enterApp(); }

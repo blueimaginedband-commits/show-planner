@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#fbf6ef">
 <meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Band Planner">
 <title>Show Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23e8743b'/%3E%3Cpath d='M13 9v11.5a3.5 3.5 0 1 1-2-3.2V9h9v3h-7z' fill='%23ffffff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -130,13 +135,17 @@
           <p>Open the link, type the band passcode, then pick your name (or type it the first time). Your phone or computer remembers you after that.</p></details>
         <details><summary>I'm on a new phone or computer. Will my dates be there?</summary>
           <p>Yes. Enter the passcode and tap <b>your same name</b> from the list. Your dates are saved under your name, not your device. Picking a different spelling creates a new person.</p></details>
+        <details><summary>Can I put it on my phone's home screen?</summary>
+          <p>Yes. On iPhone, open the site in Safari, tap <b>Share</b>, then <b>Add to Home Screen</b>. On Android, open it in Chrome, tap the <b>⋮</b> menu, then <b>Add to Home screen</b>. It opens like an app.</p></details>
         <details><summary>How do I switch to a different person?</summary>
           <p>Tap <b>switch</b> next to your name at the top right, then pick the right name.</p></details>
       </div>
 
       <div class="help-group">
         <h3>Marking when you're free</h3>
-        <details open><summary>How do I mark my availability?</summary>
+        <details open><summary>What's the fastest way to fill it in?</summary>
+          <p>Tap <b>⚡ Fill in my usual week</b> at the top of Availability. Pick your normal times for each day (for example "Free after 6 PM" on weekdays, "Free all day" on weekends), choose how many weeks, and tap <b>Fill in my calendar</b>. Then just fix any days that are different.</p></details>
+        <details><summary>How do I mark my availability one day at a time?</summary>
           <ol><li>Go to <b>Availability</b> and make sure <b>My times</b> is selected.</li>
             <li>Tap a day: <b>once</b> for Free (green), <b>twice</b> for Maybe (yellow), <b>three times</b> for Busy (red), <b>four times</b> to clear it.</li>
             <li>That's it. It saves by itself. You'll see <b>Saved</b> near the top.</li></ol></details>
@@ -169,6 +178,8 @@
           <p>Tap <b>Everyone</b> on the Availability tab. The box at the top shows the <b>best time coming up</b>. The list on the right shows each day's best time for the next 60 days, with the most people first.</p></details>
         <details><summary>What do I see when I tap a day?</summary>
           <p>On the <b>Everyone</b> view: <b>Best rehearsal times</b> for that day: the top time windows, who can make each one and who's missing. Below that, a small chart shows each person's free hours, with the best window outlined.</p></details>
+        <details><summary>How do I remind people who haven't filled it in?</summary>
+          <p>On the <b>Everyone</b> view, the top box shows who's still missing for the next 2 weeks. Tap <b>Copy reminder for the group chat</b> and paste it. It includes a link that logs them straight in.</p></details>
         <details><summary>It says nobody overlaps. What does that mean?</summary>
           <p>People are free that day, but at different times (for example, one person 5–7 PM and another 7–11 PM). Ask people to fill in more days or wider times.</p></details>
       </div>
@@ -203,7 +214,7 @@
       <div class="help-group">
         <h3>Privacy and problems</h3>
         <details><summary>Who can see this?</summary>
-          <p>Only people with the band passcode. It isn't listed on Google. Anyone with the passcode can view and edit, so only share it with the band.</p></details>
+          <p>Only people with the band passcode. It isn't listed on Google. Anyone with the passcode can view and edit, so only share it with the band. The invite link has the passcode built in, so keep that inside the band too.</p></details>
         <details><summary>My changes aren't showing up for others.</summary>
           <p>Look for <b>Saved</b> near the top after you change something. Other people's screens update within a few seconds. If you see a yellow "Can't reach the server" note, check your internet and refresh the page.</p></details>
         <details><summary>There's a duplicate or old person in the band list.</summary>
@@ -274,6 +285,29 @@
     <div class="actions">
       <button class="btn ghost" type="button" id="cancelShow">Cancel</button>
       <button class="btn" type="submit" id="saveShow">Save show</button>
+    </div>
+  </form>
+</div>
+
+<!-- fill in my usual week -->
+<div class="overlay" id="usualModal" hidden>
+  <form class="modal" id="usualForm" novalidate>
+    <div class="row-between" style="margin-bottom:0">
+      <h2>Your usual week</h2>
+      <button class="iconbtn" type="button" data-usual="close" aria-label="Close">&times;</button>
+    </div>
+    <p class="muted" style="margin:0">Pick when you're normally free on each day and we'll fill in your calendar. You can still change any single day afterwards.</p>
+    <div class="uw-rows" id="uwRows"></div>
+    <div class="uw-opts">
+      <label class="uw-weeks">Fill in the next
+        <select id="uwWeeks"><option value="2">2 weeks</option><option value="4" selected>4 weeks</option><option value="8">8 weeks</option></select>
+      </label>
+      <label class="uw-keep"><input type="checkbox" id="uwKeep" checked> Keep days I've already filled in</label>
+    </div>
+    <p class="err" id="uwErr"></p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-usual="close">Cancel</button>
+      <button class="btn" type="submit">Fill in my calendar</button>
     </div>
   </form>
 </div>
