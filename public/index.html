@@ -40,9 +40,9 @@
       <div class="me">You're <b id="meName"></b> · <button class="linkbtn" id="switchMe" type="button">switch</button></div>
     </div>
     <nav class="wrap tabs">
+      <a href="#availability">Availability</a>
       <a href="#shows">Schedule</a>
       <a href="#itinerary">Itinerary</a>
-      <a href="#availability">Availability</a>
     </nav>
   </header>
 
@@ -73,10 +73,11 @@
 
     <!-- AVAILABILITY -->
     <section id="tab-availability" class="tab" hidden>
+      <div class="welcome" id="welcome"></div>
       <div class="row-between">
-        <div class="seg">
-          <button type="button" data-mode="mine">Mark my dates</button>
-          <button type="button" data-mode="band">Whole band</button>
+        <div class="seg big-seg">
+          <button type="button" data-mode="mine">My times</button>
+          <button type="button" data-mode="band">Everyone</button>
         </div>
         <span class="status" id="saveStatus"></span>
       </div>

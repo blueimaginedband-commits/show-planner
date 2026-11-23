@@ -194,10 +194,10 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#app').hidden) refresh(); });
 
   /* ---------- tabs ---------- */
-  const TABS = ['shows', 'itinerary', 'availability'];
+  const TABS = ['availability', 'shows', 'itinerary'];
   function showTab() {
     const h = location.hash.slice(1);
-    const t = TABS.includes(h) ? h : 'shows';
+    const t = TABS.includes(h) ? h : 'availability';
     document.querySelectorAll('.tab').forEach((s) => (s.hidden = s.id !== 'tab-' + t));
     document.querySelectorAll('.tabs a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + t));
     if (t === 'itinerary') renderItinerary();
@@ -527,8 +527,7 @@
       const st = S.editing ? await api('PUT', '/api/shows/' + S.editing, body) : await api('POST', '/api/shows', body);
       if (!S.editing && body.type === 'show') { const added = st.shows.filter((s) => s.date === body.date && s.venue === body.venue).pop(); if (added) S.itinId = added.id; }
       apply(st);
-      closeShow(); toast(body.type === 'practice' ? 'Practice saved' : 'Show saved');
-      if (location.hash === '#availability') location.hash = '#shows';
+      closeShow(); toast(body.type === 'practice' ? 'Practice saved \u2014 it\u2019s on the Schedule tab' : 'Show saved \u2014 it\u2019s on the Schedule tab');
     } catch (err) { $('#showErr').textContent = err.message; }
     $('#saveShow').disabled = false;
   });
@@ -541,8 +540,9 @@
     if (!S.month) { const t = new Date(); S.month = new Date(t.getFullYear(), t.getMonth(), 1); }
     document.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
     $('#calHint').textContent = S.mode === 'mine'
-      ? 'Tap a date to cycle Free → Maybe → Busy → blank. Add times like “after 6 PM” in the panel. Saves automatically.'
-      : 'Dots show each person. Green outline = everyone\u2019s free. Tap a date to see the hours you overlap.';
+      ? 'Tap a day once for Free, twice for Maybe, three times for Busy. It saves by itself.'
+      : 'Tap any day to see who\u2019s free and the best time to meet.';
+    renderWelcome();
     const y = S.month.getFullYear(), m = S.month.getMonth();
     $('#monthLabel').textContent = S.month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     const startDow = new Date(y, m, 1).getDay();
@@ -589,6 +589,47 @@
   $('#nextMonth').addEventListener('click', () => { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + 1, 1); renderCalendar(); });
   document.querySelector('.seg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.mode = b.dataset.mode; renderCalendar(); renderDetail(); });
 
+  /* ---------- welcome strip ---------- */
+  function renderWelcome() {
+    const el = $('#welcome'); if (!el) return;
+    const today = todayIso();
+    const next14 = [...Array(14)].map((_, i) => addDays(today, i));
+    const filled = next14.filter((k) => S.myDates[k] !== undefined).length;
+    if (S.mode === 'mine') {
+      const pct = Math.round((filled / 14) * 100);
+      el.innerHTML = `<div class="wl-main">
+          <h2 class="wl-hi">Hi ${esc(S.me)}! When are you free?</h2>
+          <ol class="wl-steps"><li><b>1</b> Tap a day</li><li><b>2</b> Pick a time <span>(optional)</span></li><li><b>3</b> Done, it saves itself</li></ol>
+        </div>
+        <div class="wl-side">
+          <div class="wl-meter"><i style="width:${pct}%"></i></div>
+          <div class="wl-count">${filled === 0 ? 'You haven\u2019t filled in the next 2 weeks yet' : filled >= 14 ? 'Next 2 weeks all filled in. Nice!' : `You\u2019ve filled in <b>${filled}</b> of the next 14 days`}</div>
+          <button type="button" class="linkbtn small" data-goto="band">See when everyone\u2019s free \u2192</button>
+        </div>`;
+    } else {
+      const ppl = members();
+      let best = null;
+      for (let i = 0; i < 60 && ppl.length > 1; i++) {
+        const k = addDays(today, i); if (showsOn(k).length) continue;
+        const g = bestSlots(k, 1)[0];
+        if (g && g.b - g.a >= 60 && g.who.length >= 2 && (!best || g.free > best.g.free)) { best = { k, g }; if (g.free === ppl.length) break; }
+      }
+      el.innerHTML = best ? `<div class="wl-main">
+          <div class="wl-kicker">Best time coming up</div>
+          <h2 class="wl-hi">${esc(fmtDay(best.k))} \u00b7 ${esc(spanText([best.g.a, best.g.b]))}</h2>
+          <div class="wl-who">${best.g.free === ppl.length ? 'Everyone\u2019s free' : `${best.g.who.length} of ${ppl.length} free \u00b7 missing ${esc(ppl.filter((n) => !best.g.who.some((x) => x.n === n)).join(', '))}`}</div>
+        </div>
+        <div class="wl-side">${planBtn(best.k, 'btn', 'Plan practice', [best.g.a, best.g.b])}
+          <button type="button" class="linkbtn small" data-goto="mine">Update my times \u2192</button></div>`
+        : `<div class="wl-main"><h2 class="wl-hi">No overlap yet</h2><div class="wl-who">Once a couple of people fill in their times, the best one shows up here.</div></div>
+           <div class="wl-side"><button type="button" class="btn" data-goto="mine">Add my times</button></div>`;
+    }
+  }
+  $('#welcome').addEventListener('click', (e) => {
+    const g = e.target.closest('[data-goto]'); if (!g) return;
+    S.mode = g.dataset.goto; renderCalendar(); renderDetail();
+  });
+
   /* ---------- copy / repeat weeks ---------- */
   const addDays = (k, n) => { const d = parse(k); d.setDate(d.getDate() + n); return iso(d); };
   const weekStart = (k) => addDays(k, -parse(k).getDay());
@@ -598,58 +639,133 @@
   const dayName = (k) => parse(k).toLocaleDateString(undefined, { weekday: 'long' });
   const cloneV = (v) => (v && typeof v === 'object' ? { ...v } : v);
 
+  const fmtMD = (k) => parse(k).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const fmtDay = (k) => parse(k).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  function weekLabel(ws) {
+    const diff = Math.round((parse(ws) - parse(weekStart(todayIso()))) / (7 * 864e5));
+    return diff === 0 ? 'This week' : diff === 1 ? 'Next week' : diff === -1 ? 'Last week' : 'Week of ' + fmtMD(ws);
+  }
+  const answerText = (v) => { const e = norm(v); const w = winLabel(e); return { free: 'Free', maybe: 'Maybe', busy: 'Busy' }[e.s] + (w ? ' ' + w : ''); };
+  const REPEAT_WEEKS = [7, 14, 21, 28];
+
+  // One row per weekday: what would be copied, where to, and whether it can be.
+  function copyRows(mode) {
+    const ws = curWeek(), today = todayIso();
+    return [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      if (mode === 'last') {
+        const src = addDays(ws, i - 7), dst = addDays(ws, i), v = S.myDates[src], cur = S.myDates[dst];
+        const why = v === undefined ? 'Nothing marked last week' : dst < today ? 'Already passed' : '';
+        const replaces = !why && cur !== undefined && JSON.stringify(cur) !== JSON.stringify(v) ? answerText(cur) : '';
+        return { i, dst, v, why, replaces, same: !why && JSON.stringify(cur) === JSON.stringify(v) };
+      }
+      const src = addDays(ws, i), v = S.myDates[src];
+      const dsts = REPEAT_WEEKS.map((n) => addDays(src, n));
+      const replacing = dsts.filter((k) => S.myDates[k] !== undefined && JSON.stringify(S.myDates[k]) !== JSON.stringify(v)).length;
+      return { i, dst: src, v, why: v === undefined ? 'Nothing marked' : '', replaces: replacing ? `replaces ${replacing} day${replacing === 1 ? '' : 's'}` : '' };
+    });
+  }
+  function openPicker(mode) {
+    S.copyMode = mode;
+    S.copySel = new Set(copyRows(mode).filter((r) => !r.why && !r.same).map((r) => r.i));
+    renderWeekBar();
+  }
+  function pickerHtml() {
+    const mode = S.copyMode, ws = curWeek(), rows = copyRows(mode);
+    const n = rows.filter((r) => S.copySel.has(r.i) && !r.why).length;
+    const title = mode === 'last'
+      ? `Copy from last week <span>(${fmtMD(addDays(ws, -7))} – ${fmtMD(addDays(ws, -1))})</span> into ${weekLabel(ws).toLowerCase().replace('week of', 'the week of')}`
+      : `Repeat ${weekLabel(ws).toLowerCase().replace('week of', 'the week of')}’s days for the next 4 weeks <span>(through ${fmtMD(addDays(ws, 34))})</span>`;
+    return `<div class="picker-box">
+      <div class="pk-title">${title}</div>
+      <div class="pk-hint">Pick the days to copy:</div>
+      <ul class="pk-list">${rows.map((r) => {
+        const dis = !!r.why || r.same;
+        const right = r.why ? `<em>${esc(r.why)}</em>` : r.same ? '<em>Already the same</em>' : r.replaces ? `<em class="warn">${mode === 'last' ? 'replaces ' + esc(r.replaces) : esc(r.replaces)}</em>` : '';
+        const left = mode === 'last' ? `${fmtDay(r.dst)}` : `Every ${parse(r.dst).toLocaleDateString(undefined, { weekday: 'long' })}`;
+        return `<li class="${dis ? 'dis' : ''}"><label>
+          <input type="checkbox" data-pick="${r.i}" ${dis ? 'disabled' : ''} ${!dis && S.copySel.has(r.i) ? 'checked' : ''}>
+          <span class="pk-day">${esc(left)}</span>
+          <span class="pk-val">${r.v !== undefined ? `<i class="sw ${norm(r.v).s}"></i>${esc(answerText(r.v))}` : '—'}</span>
+          <span class="pk-note">${right}</span></label></li>`;
+      }).join('')}</ul>
+      <div class="pk-foot">
+        <button type="button" class="linkbtn small" data-copy="all">Select all</button>
+        <button type="button" class="linkbtn small" data-copy="none">None</button>
+        <span class="pk-spacer"></span>
+        <button type="button" class="btn ghost small" data-copy="cancel">Cancel</button>
+        <button type="button" class="btn small" data-copy="go" ${n ? '' : 'disabled'}>Copy ${n} day${n === 1 ? '' : 's'}${mode === 'repeat' && n ? ' × 4 weeks' : ''}</button>
+      </div>
+    </div>`;
+  }
   function renderWeekBar() {
     const bar = $('#weekBar');
     if (S.mode !== 'mine') { bar.hidden = true; return; }
     bar.hidden = false;
     const ws = curWeek(), we = addDays(ws, 6), today = todayIso();
-    const fmt = (k) => parse(k).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     const canCopy = hasAny(addDays(ws, -7)) && we >= today;
     const canRepeat = hasAny(ws);
     bar.innerHTML = `
-      <div class="wb-nav">
-        <button type="button" class="iconbtn sm" data-wk="-7" aria-label="Previous week">&#8249;</button>
-        <span>Week of <b>${fmt(ws)} \u2013 ${fmt(we)}</b></span>
-        <button type="button" class="iconbtn sm" data-wk="7" aria-label="Next week">&#8250;</button>
+      <div class="wb-row">
+        <div class="wb-nav">
+          <button type="button" class="iconbtn sm" data-wk="-7" aria-label="Previous week">&#8249;</button>
+          <span><b>${weekLabel(ws)}</b> <span class="wb-dates">${fmtMD(ws)} – ${fmtMD(we)}</span></span>
+          <button type="button" class="iconbtn sm" data-wk="7" aria-label="Next week">&#8250;</button>
+        </div>
+        <div class="wb-acts">
+          <button type="button" class="btn ghost small${S.copyMode === 'last' ? ' on' : ''}" data-copy="last" ${canCopy ? '' : 'disabled'} title="${canCopy ? 'Choose days to copy from the week before' : 'Nothing marked the week before'}">Copy from last week…</button>
+          <button type="button" class="btn ghost small${S.copyMode === 'repeat' ? ' on' : ''}" data-copy="repeat" ${canRepeat ? '' : 'disabled'} title="${canRepeat ? 'Choose days to repeat for the next 4 weeks' : 'Mark some days this week first'}">Repeat for 4 weeks…</button>
+          ${S.undo ? '<button type="button" class="linkbtn small" data-copy="undo">Undo last copy</button>' : ''}
+        </div>
       </div>
-      <div class="wb-acts">
-        <button type="button" class="btn ghost small" data-copy="last" ${canCopy ? '' : 'disabled'} title="${canCopy ? 'Copy your answers from the week before' : 'Nothing marked the week before'}">Copy last week</button>
-        <button type="button" class="btn ghost small" data-copy="repeat" ${canRepeat ? '' : 'disabled'} title="${canRepeat ? 'Copy this week into the next 4 weeks' : 'Mark some days this week first'}">Repeat for 4 weeks</button>
-        ${S.undo ? '<button type="button" class="linkbtn small" data-copy="undo">Undo</button>' : ''}
-      </div>`;
+      ${S.copyMode ? pickerHtml() : ''}`;
   }
-  // Copy my answers from one week into other weeks. Past days and blank source days are left alone.
-  function copyWeeks(fromWs, toWsList) {
+  // Copy chosen weekdays (0 = Sun) from one week into other weeks. Past days and blank source days are left alone.
+  function copyWeeks(fromWs, toWsList, only) {
     const before = { ...S.myDates };
     let n = 0;
     const today = todayIso();
     toWsList.forEach((ts) => weekDays(ts).forEach((k, i) => {
+      if (only && !only.has(i)) return;
       if (k < today) return;
       const src = S.myDates[addDays(fromWs, i)];
       if (src === undefined) return;
       S.myDates[k] = cloneV(src); n++;
     }));
-    if (!n) { toast('Nothing to copy into upcoming days.'); return; }
+    S.copyMode = null;
+    if (!n) { toast('Nothing to copy into upcoming days.'); renderWeekBar(); return; }
     S.undo = before;
-    clearTimeout(undoT); undoT = setTimeout(() => { S.undo = null; renderWeekBar(); }, 30000);
+    clearTimeout(undoT); undoT = setTimeout(() => { S.undo = null; renderWeekBar(); }, 60000);
     queueSave(); renderAvailAll();
-    toast(`Copied to ${n} day${n === 1 ? '' : 's'}. Tap Undo if that wasn\u2019t right.`);
+    toast(`Copied ${n} day${n === 1 ? '' : 's'}. Tap “Undo last copy” if that wasn’t right.`);
   }
   let undoT;
   function renderAvailAll() { renderCalendar(); renderDetail(); renderBest(); renderMembers(); renderShows(); renderItinerary(); }
+  $('#weekBar').addEventListener('change', (e) => {
+    const c = e.target.closest('[data-pick]'); if (!c) return;
+    const i = Number(c.dataset.pick);
+    if (c.checked) S.copySel.add(i); else S.copySel.delete(i);
+    renderWeekBar();
+  });
   $('#weekBar').addEventListener('click', (e) => {
     const nav = e.target.closest('[data-wk]');
     if (nav) {
       S.week = addDays(curWeek(), Number(nav.dataset.wk));
+      S.copyMode = null;
       const mid = parse(addDays(S.week, 3));
       S.month = new Date(mid.getFullYear(), mid.getMonth(), 1);
       renderCalendar(); return;
     }
     const b = e.target.closest('[data-copy]'); if (!b) return;
-    const ws = curWeek();
-    if (b.dataset.copy === 'last') copyWeeks(addDays(ws, -7), [ws]);
-    else if (b.dataset.copy === 'repeat') copyWeeks(ws, [7, 14, 21, 28].map((n) => addDays(ws, n)));
-    else if (b.dataset.copy === 'undo' && S.undo) { S.myDates = S.undo; S.undo = null; queueSave(); renderAvailAll(); toast('Undone'); }
+    const ws = curWeek(), a = b.dataset.copy;
+    if (a === 'last' || a === 'repeat') { if (S.copyMode === a) { S.copyMode = null; renderWeekBar(); } else openPicker(a); }
+    else if (a === 'cancel') { S.copyMode = null; renderWeekBar(); }
+    else if (a === 'all') { S.copySel = new Set(copyRows(S.copyMode).filter((r) => !r.why && !r.same).map((r) => r.i)); renderWeekBar(); }
+    else if (a === 'none') { S.copySel = new Set(); renderWeekBar(); }
+    else if (a === 'go') {
+      if (S.copyMode === 'last') copyWeeks(addDays(ws, -7), [ws], S.copySel);
+      else copyWeeks(ws, REPEAT_WEEKS.map((n) => addDays(ws, n)), S.copySel);
+    }
+    else if (a === 'undo' && S.undo) { S.myDates = S.undo; S.undo = null; queueSave(); renderAvailAll(); toast('Undone'); }
   });
 
   function setMine(date, e, keepPanel) {
