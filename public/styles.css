@@ -618,3 +618,4 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent)}
 /* the header's blur traps fixed children on some browsers: use a solid bar on phones so the tab bar sits at the bottom */
 @media (max-width:760px){ .top{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--bg)} }
 .d.today::after{display:none}
+.name-hint{font-size:13px;color:var(--accent);font-weight:600;min-height:1em}

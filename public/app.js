@@ -121,10 +121,17 @@
     return [...names].sort((a, b) => a.localeCompare(b));
   }
 
+  /* ---------- names: one person per name, ignoring capitals and spaces ---------- */
+  const nameKey = (n) => String(n || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const findName = (n, list) => (list || Object.keys(S.availability)).find((x) => nameKey(x) === nameKey(n)) || null;
+
   /* ---------- state ---------- */
   function apply(st) {
     if (!st || st.unchanged) return;
     S.rev = st.rev; S.shows = st.shows || []; S.availability = st.availability || {};
+    // If this device remembers a lookalike of an existing name ("west" vs "West"), use the existing person.
+    const same = S.me && !S.availability[S.me] && findName(S.me);
+    if (same) { S.me = same; store.set('sp_me', same); S.dirty = false; }
     if (st.bandName !== undefined) S.config.bandName = st.bandName;
     if (!S.dirty && !saving) S.myDates = { ...(S.availability[S.me] || {}) };
     render();
@@ -163,7 +170,10 @@
   }
   function renderChips() {
     const cur = $('#nameInput').value.trim();
-    $('#nameChips').innerHTML = gateNames.map((n) => `<button type="button" class="${n === cur ? 'on' : ''}" data-name="${esc(n)}">${esc(n)}</button>`).join('');
+    const match = cur && findName(cur, gateNames);
+    $('#nameChips').innerHTML = gateNames.map((n) => `<button type="button" class="${n === match ? 'on' : ''}" data-name="${esc(n)}">${esc(n)}</button>`).join('');
+    const hint = $('#nameHint');
+    if (hint) hint.textContent = match && match !== cur ? `You'll sign in as ${match}.` : match ? `Welcome back, ${match}.` : '';
   }
   $('#nameChips').addEventListener('click', (e) => { const b = e.target.closest('[data-name]'); if (!b) return; $('#nameInput').value = b.dataset.name; renderChips(); });
   $('#nameInput').addEventListener('input', renderChips);
@@ -174,11 +184,12 @@
   $('#gateForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     S.pass = $('#passInput').value.trim();
-    const name = $('#nameInput').value.trim().replace(/\s+/g, ' ').slice(0, 40);
+    const typed = $('#nameInput').value.trim().replace(/\s+/g, ' ').slice(0, 40);
     if (S.config.needsPasscode && !S.pass) return ($('#gateErr').textContent = 'Enter the band passcode.');
-    if (!name) return ($('#gateErr').textContent = 'Pick or type your name.');
+    if (!typed) return ($('#gateErr').textContent = 'Pick or type your name.');
     try {
       const st = await api('GET', '/api/state');
+      const name = findName(typed, Object.keys(st.availability || {})) || typed;
       S.me = name; store.set('sp_me', name); store.set('sp_pass', S.pass);
       S.dirty = false; S.rev = 0; apply(st);
       enterApp();

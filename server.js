@@ -23,6 +23,31 @@ try {
   if (e.code !== 'ENOENT') console.error('Could not read data file, starting empty:', e.message);
 }
 
+// Names are unique ignoring capitals and extra spaces: "West", "west" and " West " are one person.
+const nameKey = (n) => String(n).trim().replace(/\s+/g, ' ').toLowerCase();
+function existingName(name) {
+  const k = nameKey(name);
+  return Object.keys(db.availability).find((n) => nameKey(n) === k) || null;
+}
+function mergeDuplicateNames() {
+  const groups = {};
+  for (const n of Object.keys(db.availability)) (groups[nameKey(n)] ||= []).push(n);
+  let merged = 0;
+  for (const names of Object.values(groups)) {
+    if (names.length < 2) continue;
+    // keep the one with the most dates; add any days only the others filled in
+    names.sort((a, b) => Object.keys(db.availability[b] || {}).length - Object.keys(db.availability[a] || {}).length);
+    const keep = names[0];
+    for (const other of names.slice(1)) {
+      for (const [d, v] of Object.entries(db.availability[other] || {})) if (!(d in db.availability[keep])) db.availability[keep][d] = v;
+      delete db.availability[other];
+      merged++;
+      console.log(`Merged duplicate name "${other}" into "${keep}"`);
+    }
+  }
+  return merged;
+}
+
 let writing = Promise.resolve();
 function persist() {
   db.rev += 1;
@@ -169,7 +194,9 @@ const server = http.createServer(async (req, res) => {
     // Replace one person's availability: { name, dates: { 'YYYY-MM-DD': 'free'|'maybe'|'busy' } }
     if (p === '/api/availability' && req.method === 'PUT') {
       const body = await readBody(req);
-      const name = cleanName(body.name);
+      let name = cleanName(body.name);
+      const existing = name && existingName(name);
+      if (existing) name = existing;
       if (!name) return send(res, 400, { error: 'Name is required.' });
       const dates = {};
       for (const [d, v] of Object.entries(body.dates || {})) {
@@ -226,8 +253,10 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+if (mergeDuplicateNames()) persist();
+
 server.listen(PORT, () => {
-  console.log(`Show Planner running on port ${PORT}`);
+  console.log(`Practice Planner running on port ${PORT}`);
   console.log(`Data file: ${DATA_FILE}`);
   if (!PASSCODE) console.warn('No PASSCODE set: anyone with the link can view and edit.');
 });
