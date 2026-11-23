@@ -397,3 +397,23 @@ textarea{min-height:80px;resize:vertical}
 .help-link{color:var(--muted)}
 .tabs{overflow-x:auto;scrollbar-width:none}
 .tabs a{white-space:nowrap}
+
+/* ---------- day panel: my times first ---------- */
+.dd-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sheet-close{display:none}
+.mine-box{margin-top:10px;padding:14px;border-radius:14px;background:var(--panel-2);border:1px solid var(--line)}
+.mb-label{font-weight:700;font-size:15px;margin-bottom:8px}
+.status-pick.big{margin-top:0}
+.status-pick.big button{padding:9px 16px;font-size:14px}
+.mine-box .muted.small:first-of-type{margin-top:14px}
+.dd-switch{display:block;margin-top:14px;font-size:13px}
+.dd-me{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+/* phones: the day panel slides up from the bottom in My times */
+@media (max-width:880px){
+  #dayDetail.sheet{position:fixed;left:0;right:0;bottom:0;z-index:15;max-height:70vh;overflow:auto;border-radius:20px 20px 0 0;border-bottom:0;
+    box-shadow:0 -10px 40px -10px rgba(43,36,32,.35);padding:16px 18px calc(18px + env(safe-area-inset-bottom));animation:sheetUp .22s ease-out}
+  #dayDetail.sheet::before{content:"";display:block;width:40px;height:4px;border-radius:2px;background:var(--line);margin:-6px auto 10px}
+  #dayDetail.sheet .sheet-close{display:grid;place-items:center}
+  body.has-sheet main{padding-bottom:58vh}
+}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}

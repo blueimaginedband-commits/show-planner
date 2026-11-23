@@ -201,6 +201,7 @@
     document.querySelectorAll('.tab').forEach((s) => (s.hidden = s.id !== 'tab-' + t));
     document.querySelectorAll('.tabs a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + t));
     if (t === 'itinerary') renderItinerary();
+    document.body.classList.toggle('has-sheet', t === 'availability' && S.mode === 'mine' && !!S.sel);
   }
   addEventListener('hashchange', () => { showTab(); scrollTo(0, 0); });
 
@@ -870,6 +871,8 @@
   }
   function renderDetail() {
     const el = $('#dayDetail');
+    el.classList.toggle('sheet', S.mode === 'mine' && !!S.sel);
+    document.body.classList.toggle('has-sheet', S.mode === 'mine' && !!S.sel);
     if (!S.sel) {
       const n = Object.keys(S.myDates).filter((d) => d >= todayIso()).length;
       el.innerHTML = `<h3>${S.mode === 'mine' ? 'Your dates' : 'Pick a date'}</h3><p class="muted small" style="margin:0">${S.mode === 'mine' ? `Tap dates on the calendar to mark when you can play. You’ve marked ${n} upcoming date${n === 1 ? '' : 's'}.` : 'Tap any date to see the best rehearsal times.'}</p>`;
@@ -892,19 +895,42 @@
         <label>From<select id="winFrom">${timeOptions(mine.from, 'Any time')}</select></label>
         <label>Until<select id="winTo">${timeOptions(mine.to, 'End of day')}</select></label>
       </div>` : '';
-    el.innerHTML = `<h3>${esc(fmtLong(k))}</h3>
-      ${gigs.map((g) => isPractice(g)
+    const gigLinks = gigs.map((g) => isPractice(g)
         ? `<button type="button" class="gig-link" data-edit="${esc(g.id)}"><span class="sw prac"></span> <b>Practice</b>${g.setStart ? ' · ' + fmtTime(g.setStart) : ''}${g.setEnd ? '–' + fmtTime(g.setEnd) : ''}</button>`
-        : `<button type="button" class="gig-link" data-itin="${esc(g.id)}"><span class="sw gig"></span> <b>${esc(g.venue)}</b>${g.setStart ? ' · set ' + fmtTime(g.setStart) : ''} →</button>`).join('')}
-      <div id="rehearseBox">${rehearseHtml(k, isPast)}</div>
-      ${!isPast ? `<div class="muted small" style="margin-top:14px">Your answer</div><div class="status-pick">
-        ${['free', 'maybe', 'busy'].map((st) => `<button type="button" class="${st}${mine.s === st ? ' on' : ''}" data-set="${st}">${st[0].toUpperCase() + st.slice(1)}</button>`).join('')}
-        ${mine.s ? '<button type="button" data-set="">Clear</button>' : ''}
-      </div>${timeRow}${sameAsLast(k)}` : ''}
-      ${gig && !isPractice(gig) ? list('Free', groups.free) + list('Maybe', groups.maybe) : ''}${list('Busy', groups.busy)}${list('No answer yet', groups[''])}
-      ${!isPast ? `<div class="btn-row" style="margin-top:14px">${planBtn(k, 'btn small')}<button class="btn ghost small" type="button" data-new="${k}">+ Add show</button></div>` : ''}`;
+        : `<button type="button" class="gig-link" data-itin="${esc(g.id)}"><span class="sw gig"></span> <b>${esc(g.venue)}</b>${g.setStart ? ' · set ' + fmtTime(g.setStart) : ''} →</button>`).join('');
+    const closeBtn = '<button type="button" class="sheet-close iconbtn sm" data-close-sheet aria-label="Close">&times;</button>';
+    if (S.mode === 'mine') {
+      // My times: only my own answer, times first. Nothing about the rest of the band.
+      el.innerHTML = `<div class="dd-head"><h3>${esc(fmtLong(k))}</h3>${closeBtn}</div>
+        ${isPast ? '<p class="muted small" style="margin:6px 0 0">This day has already passed.</p>' : `
+        <div class="mine-box">
+          <div class="mb-label">Are you free?</div>
+          <div class="status-pick big">
+            ${['free', 'maybe', 'busy'].map((st) => `<button type="button" class="${st}${mine.s === st ? ' on' : ''}" data-set="${st}">${st[0].toUpperCase() + st.slice(1)}</button>`).join('')}
+            ${mine.s ? '<button type="button" data-set="">Clear</button>' : ''}
+          </div>
+          ${timeRow || (mine.s === 'busy' ? '' : '<p class="muted small" style="margin:10px 0 0">Pick Free or Maybe, then choose your times.</p>')}
+          ${sameAsLast(k)}
+        </div>`}
+        ${gigLinks}
+        <button type="button" class="linkbtn small dd-switch" data-goto="band">See who else is free this day →</button>`;
+    } else {
+      // Everyone: the band's picture for this day.
+      const myLine = mine.s ? `You: ${esc(answerText(S.myDates[k]))}` : 'You haven’t answered for this day';
+      el.innerHTML = `<div class="dd-head"><h3>${esc(fmtLong(k))}</h3></div>
+        ${gigLinks}
+        <div id="rehearseBox">${rehearseHtml(k, isPast)}</div>
+        ${gig && !isPractice(gig) ? list('Free', groups.free) + list('Maybe', groups.maybe) : ''}${list('Busy', groups.busy)}${list('No answer yet', groups[''])}
+        ${!isPast ? `<div class="btn-row" style="margin-top:14px">${planBtn(k, 'btn small')}<button class="btn ghost small" type="button" data-new="${k}">+ Add show</button></div>
+        <div class="dd-me"><span>${myLine}</span><button type="button" class="linkbtn small" data-goto="mine">Change →</button></div>` : ''}`;
+    }
+    el.classList.toggle('sheet', S.mode === 'mine' && !!S.sel);
+    document.body.classList.toggle('has-sheet', S.mode === 'mine' && !!S.sel);
   }
   $('#dayDetail').addEventListener('click', (e) => {
+    if (e.target.closest('[data-close-sheet]')) { S.sel = null; renderCalendar(); renderDetail(); return; }
+    const go = e.target.closest('[data-goto]');
+    if (go) { S.mode = go.dataset.goto; renderCalendar(); renderDetail(); return; }
     if (!S.sel) return;
     const b = e.target.closest('[data-set]');
     if (b) { const cur = entry(S.me, S.sel); return setMine(S.sel, { ...cur, s: b.dataset.set }); }
