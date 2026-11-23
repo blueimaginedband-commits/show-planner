@@ -547,7 +547,7 @@
     if (!S.month) { const t = new Date(); S.month = new Date(t.getFullYear(), t.getMonth(), 1); }
     document.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.mode));
     $('#calHint').textContent = S.mode === 'mine'
-      ? 'Tap a day once for Free, twice for Maybe, three times for Busy. It saves by itself.'
+      ? 'Tap a day, then choose Free, Maybe or Busy. It saves by itself.'
       : 'Tap any day to see who\u2019s free and the best time to meet.';
     renderWelcome();
     const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -586,10 +586,6 @@
   $('#cal').addEventListener('click', (e) => {
     const b = e.target.closest('[data-day]'); if (!b || b.classList.contains('out')) return;
     const k = b.dataset.day;
-    if (S.mode === 'mine' && k >= todayIso()) {
-      const cur = entry(S.me, k);
-      setMine(k, { ...cur, s: CYCLE[cur.s] });
-    }
     S.sel = k; S.week = weekStart(k); renderCalendar(); renderDetail();
   });
   $('#prevMonth').addEventListener('click', () => { S.month = new Date(S.month.getFullYear(), S.month.getMonth() - 1, 1); renderCalendar(); });
@@ -607,7 +603,7 @@
       const pct = Math.round((filled / 14) * 100);
       el.innerHTML = `<div class="wl-main">
           <h2 class="wl-hi">Hey ${esc(S.me)}, when can you play?</h2>
-          <ol class="wl-steps"><li><b>1</b> Tap a day</li><li><b>2</b> Pick a time <span>(optional)</span></li><li><b>3</b> Done, it saves itself</li></ol>
+          <ol class="wl-steps"><li><b>1</b> Tap a day</li><li><b>2</b> Choose Free, Maybe or Busy</li><li><b>3</b> Pick a time <span>(optional)</span></li></ol>
         </div>
         <div class="wl-side">
           <button type="button" class="btn${filled < 7 ? '' : ' ghost'}" data-usual="open">\u26a1 Fill in my usual week</button>
@@ -984,7 +980,7 @@
       el.innerHTML = `<div class="dd-head"><h3>${esc(fmtLong(k))}</h3>${closeBtn}</div>
         ${isPast ? '<p class="muted small" style="margin:6px 0 0">This day has already passed.</p>' : `
         <div class="mine-box">
-          <div class="mb-label">Are you free?</div>
+          <div class="mb-label">${mine.s ? 'Are you free?' : 'Are you free this day?'}</div>
           <div class="status-pick big">
             ${['free', 'maybe', 'busy'].map((st) => `<button type="button" class="${st}${mine.s === st ? ' on' : ''}" data-set="${st}">${st[0].toUpperCase() + st.slice(1)}</button>`).join('')}
             ${mine.s ? '<button type="button" data-set="">Clear</button>' : ''}
