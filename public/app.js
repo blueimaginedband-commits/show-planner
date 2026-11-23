@@ -194,7 +194,7 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#app').hidden) refresh(); });
 
   /* ---------- tabs ---------- */
-  const TABS = ['availability', 'shows', 'itinerary'];
+  const TABS = ['availability', 'shows', 'itinerary', 'help'];
   function showTab() {
     const h = location.hash.slice(1);
     const t = TABS.includes(h) ? h : 'availability';
@@ -605,6 +605,7 @@
           <div class="wl-meter"><i style="width:${pct}%"></i></div>
           <div class="wl-count">${filled === 0 ? 'You haven\u2019t filled in the next 2 weeks yet' : filled >= 14 ? 'Next 2 weeks all filled in. Nice!' : `You\u2019ve filled in <b>${filled}</b> of the next 14 days`}</div>
           <button type="button" class="linkbtn small" data-goto="band">See when everyone\u2019s free \u2192</button>
+          <a class="small help-link" href="#help">Questions? How it works</a>
         </div>`;
     } else {
       const ppl = members();
