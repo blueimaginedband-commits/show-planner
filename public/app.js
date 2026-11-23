@@ -502,8 +502,13 @@
   $('#addPractice').addEventListener('click', () => openShow(null, '', 'practice'));
   $('#closeModal').addEventListener('click', closeShow);
   $('#cancelShow').addEventListener('click', closeShow);
-  $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeShow(); });
-  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#modal').hidden) closeShow(); });
+  // The form only closes with X, Cancel or Save, so a stray click outside it never throws away what you typed.
+  addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || $('#modal').hidden) return;
+    const a = document.activeElement;
+    if (a && a.closest && a.closest('#showForm') && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) { a.blur(); return; }
+    closeShow();
+  });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = { by: S.me };
@@ -647,11 +652,20 @@
     else if (b.dataset.copy === 'undo' && S.undo) { S.myDates = S.undo; S.undo = null; queueSave(); renderAvailAll(); toast('Undone'); }
   });
 
-  function setMine(date, e) {
+  function setMine(date, e, keepPanel) {
     if (e.s === 'busy' || !e.s) { e.from = ''; e.to = ''; }
     const v = pack(e);
     if (v) S.myDates[date] = v; else delete S.myDates[date];
-    queueSave(); renderCalendar(); renderDetail(); renderBest(); renderMembers(); renderShows(); renderItinerary();
+    queueSave(); renderCalendar(); renderBest(); renderMembers(); renderShows(); renderItinerary();
+    if (keepPanel) { const box = $('#rehearseBox'); if (box) box.innerHTML = rehearseHtml(date, date < todayIso()); }
+    else renderDetail();
+  }
+  // Simple time dropdown: every 30 minutes from 6 AM to 11:30 PM.
+  function timeOptions(sel, emptyLabel) {
+    const opts = [['', emptyLabel]];
+    for (let m = 6 * 60; m < 24 * 60; m += 30) { const t = minToTime(m); opts.push([t, fmtTime(t)]); }
+    if (sel && !opts.some((o) => o[0] === sel)) { opts.push([sel, fmtTime(sel)]); opts.sort((a, b) => (a[0] ? sortKey(a[0]) : -1) - (b[0] ? sortKey(b[0]) : -1)); }
+    return opts.map(([v, l]) => `<option value="${v}"${v === (sel || '') ? ' selected' : ''}>${esc(l)}</option>`).join('');
   }
 
   /* ---------- best rehearsal times ---------- */
@@ -751,21 +765,21 @@
     const list = (label, arr) => arr.length ? `<div class="muted small" style="margin-top:10px">${label}</div><div class="who" style="margin-top:4px">${arr.map((n) => personChip(n, k, gig)).join('')}</div>` : '';
     const mine = entry(S.me, k);
     const timeRow = mine.s === 'free' || mine.s === 'maybe' ? `
-      <div class="muted small" style="margin-top:12px">When? <span class="faint">(leave blank for all day)</span></div>
-      <div class="win-row">
-        <label>From<input type="time" id="winFrom" value="${esc(mine.from)}"></label>
-        <label>Until<input type="time" id="winTo" value="${esc(mine.to)}"></label>
-      </div>
+      <div class="muted small" style="margin-top:12px">What times?</div>
       <div class="win-quick">
-        <button type="button" data-win="18:00|">After 6 PM</button>
-        <button type="button" data-win="|17:00">Until 5 PM</button>
-        <button type="button" data-win="|">All day</button>
+        ${[['|', 'All day'], ['17:00|', 'After 5 PM'], ['18:00|', 'After 6 PM'], ['19:00|', 'After 7 PM'], ['|17:00', 'Until 5 PM']].map(([v, l]) => {
+          const [f, t] = v.split('|'); const on = (mine.from || '') === f && (mine.to || '') === t;
+          return `<button type="button" class="${on ? 'on' : ''}" data-win="${v}">${l}</button>`; }).join('')}
+      </div>
+      <div class="win-row">
+        <label>From<select id="winFrom">${timeOptions(mine.from, 'Any time')}</select></label>
+        <label>Until<select id="winTo">${timeOptions(mine.to, 'End of day')}</select></label>
       </div>` : '';
     el.innerHTML = `<h3>${esc(fmtLong(k))}</h3>
       ${gigs.map((g) => isPractice(g)
         ? `<button type="button" class="gig-link" data-edit="${esc(g.id)}"><span class="sw prac"></span> <b>Practice</b>${g.setStart ? ' · ' + fmtTime(g.setStart) : ''}${g.setEnd ? '–' + fmtTime(g.setEnd) : ''}</button>`
         : `<button type="button" class="gig-link" data-itin="${esc(g.id)}"><span class="sw gig"></span> <b>${esc(g.venue)}</b>${g.setStart ? ' · set ' + fmtTime(g.setStart) : ''} →</button>`).join('')}
-      ${rehearseHtml(k, isPast)}
+      <div id="rehearseBox">${rehearseHtml(k, isPast)}</div>
       ${!isPast ? `<div class="muted small" style="margin-top:14px">Your answer</div><div class="status-pick">
         ${['free', 'maybe', 'busy'].map((st) => `<button type="button" class="${st}${mine.s === st ? ' on' : ''}" data-set="${st}">${st[0].toUpperCase() + st.slice(1)}</button>`).join('')}
         ${mine.s ? '<button type="button" data-set="">Clear</button>' : ''}
@@ -785,9 +799,14 @@
   $('#dayDetail').addEventListener('change', (e) => {
     if (!S.sel || (e.target.id !== 'winFrom' && e.target.id !== 'winTo')) return;
     const cur = entry(S.me, S.sel);
-    let from = $('#winFrom').value, to = $('#winTo').value;
-    if (from && to && sortKey(to) <= sortKey(from)) { toast('“Until” needs to be after “From”.'); return; }
-    setMine(S.sel, { ...cur, from, to });
+    const from = $('#winFrom').value, to = $('#winTo').value;
+    if (from && to && sortKey(to) <= sortKey(from)) {
+      toast('\u201cUntil\u201d needs to be later than \u201cFrom\u201d.');
+      e.target.value = e.target.id === 'winFrom' ? (cur.from || '') : (cur.to || '');
+      return;
+    }
+    setMine(S.sel, { ...cur, from, to }, true);
+    document.querySelectorAll('.win-quick [data-win]').forEach((b) => { const [f, t] = b.dataset.win.split('|'); b.classList.toggle('on', f === from && t === to); });
   });
 
   function renderBest() {
